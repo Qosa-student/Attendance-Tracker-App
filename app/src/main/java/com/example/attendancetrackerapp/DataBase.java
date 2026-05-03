@@ -139,28 +139,6 @@ public class DataBase extends SQLiteOpenHelper {
         return rows > 0;
     }
 
-    public Cursor getTeacherMonthlySummary(int teacherId, String yearMonth) {
-        SQLiteDatabase db = this.getReadableDatabase();
-        return db.rawQuery(
-                "SELECT status, COUNT(*) as count " +
-                        "FROM teacher_attendance " +
-                        "WHERE teacher_id=? AND date LIKE ? " +
-                        "GROUP BY status",
-                new String[]{String.valueOf(teacherId), yearMonth + "%"});
-    }
-
-    public boolean updateTeacherSchedule(int teacherId,
-                                         String expectedStart, String expectedEnd) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put("expected_start", expectedStart);
-        values.put("expected_end", expectedEnd);
-        int rows = db.update("users", values, "id=?",
-                new String[]{String.valueOf(teacherId)});
-        db.close();
-        return rows > 0;
-    }
-
     public Cursor getTeacherRecordForToday(int teacherId, String date) {
         SQLiteDatabase db = this.getReadableDatabase();
         return db.rawQuery(
@@ -220,17 +198,6 @@ public class DataBase extends SQLiteOpenHelper {
     }
 
     // --- STUDENT METHODS ---
-
-    public boolean addStudent(String studentNumber, String name, String section) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put("student_number", studentNumber);
-        values.put("name", name);
-        values.put("section", section);
-        long result = db.insert("students", null, values);
-        db.close();
-        return result != -1;
-    }
 
     // --- SUBJECT/CLASS METHODS ---
 
@@ -315,12 +282,6 @@ public class DataBase extends SQLiteOpenHelper {
                 new String[]{String.valueOf(userId)});
     }
 
-    public Cursor getAllStudents(String section) {
-        SQLiteDatabase db = this.getReadableDatabase();
-        return db.rawQuery("SELECT * FROM students WHERE section=? ORDER BY student_number ASC",
-                new String[]{section});
-    }
-
     public Cursor findStudentByNumber(String studentNumber, int teacherId) {
         SQLiteDatabase db = this.getReadableDatabase();
         return db.rawQuery(
@@ -328,23 +289,6 @@ public class DataBase extends SQLiteOpenHelper {
                 "JOIN classes c ON s.class_id = c.id " +
                 "WHERE s.student_number=? AND c.teacher_id=?",
                 new String[]{studentNumber, String.valueOf(teacherId)});
-    }
-
-    public boolean updateStudent(int id, String name, String section) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put("name", name);
-        values.put("section", section);
-        int rows = db.update("students", values, "id=?", new String[]{String.valueOf(id)});
-        db.close();
-        return rows > 0;
-    }
-
-    public boolean deleteStudent(int id) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        int rows = db.delete("students", "id=?", new String[]{String.valueOf(id)});
-        db.close();
-        return rows > 0;
     }
 
     // --- ATTENDANCE METHODS ---
@@ -389,14 +333,5 @@ public class DataBase extends SQLiteOpenHelper {
                         "WHERE c.teacher_id=? " +
                         "GROUP BY s.id ORDER BY s.student_number ASC",
                 new String[]{String.valueOf(teacherId)});
-    }
-
-    public boolean updateAttendance(int id, String status) {
-        SQLiteDatabase db = this.getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put("status", status);
-        int rows = db.update("attendance", values, "id=?", new String[]{String.valueOf(id)});
-        db.close();
-        return rows > 0;
     }
 }
