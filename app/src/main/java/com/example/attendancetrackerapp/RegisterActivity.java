@@ -18,7 +18,6 @@ public class RegisterActivity extends AppCompatActivity {
     EditText etName, etEmail, etPassword, etConfirmPassword;
     Button btnRegister;
     TextView tvLogin;
-    Spinner spinnerRole;
     DataBase db;
 
     @Override
@@ -34,16 +33,6 @@ public class RegisterActivity extends AppCompatActivity {
         etConfirmPassword = findViewById(R.id.etConfirmPassword);
         btnRegister = findViewById(R.id.btnRegister);
         tvLogin = findViewById(R.id.tvLogin);
-        spinnerRole = findViewById(R.id.spinnerRole);
-
-        String[] roles = {"instructor", "admin"};
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                this,
-                android.R.layout.simple_spinner_item,
-                roles
-        );
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spinnerRole.setAdapter(adapter);
 
         btnRegister.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -52,7 +41,6 @@ public class RegisterActivity extends AppCompatActivity {
                 String email = etEmail.getText().toString().trim();
                 String password = etPassword.getText().toString().trim();
                 String confirmPassword = etConfirmPassword.getText().toString().trim();
-                String role = spinnerRole.getSelectedItem().toString();
 
                 if (name.isEmpty() || email.isEmpty() ||
                         password.isEmpty() || confirmPassword.isEmpty()) {
@@ -73,7 +61,7 @@ public class RegisterActivity extends AppCompatActivity {
                     return;
                 }
 
-                boolean success = db.registerUser(name, email, password, role);
+                boolean success = db.registerUser(name, email, password);
                 if (success) {
                     Toast.makeText(RegisterActivity.this,
                             "Account created! Please sign in.", Toast.LENGTH_SHORT).show();

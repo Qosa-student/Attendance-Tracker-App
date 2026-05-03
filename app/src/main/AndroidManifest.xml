@@ -27,8 +27,6 @@
         <activity android:name=".ReportsActivity" />
         <activity android:name=".ProfileActivity" />
         <activity android:name=".ManageStudentsActivity" />
-        <activity android:name=".AdminDashboardActivity" />
-        <activity android:name=".AdminProfileActivity" />
 
     </application>
 

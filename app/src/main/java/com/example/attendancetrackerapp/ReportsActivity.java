@@ -1,6 +1,7 @@
 package com.example.attendancetrackerapp;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.view.View;
@@ -14,6 +15,7 @@ public class ReportsActivity extends AppCompatActivity {
     LinearLayout llReportList, llFlagged;
     LinearLayout navHome, navAttendance, navScanner, navReports, navProfile;
     DataBase db;
+    int userId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -21,6 +23,10 @@ public class ReportsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_reports);
 
         db = new DataBase(this);
+        
+        SharedPreferences prefs = getSharedPreferences(
+                "user_session", MODE_PRIVATE);
+        userId = prefs.getInt("user_id", -1);
 
         llReportList = findViewById(R.id.llReportList);
         llFlagged = findViewById(R.id.llFlagged);
@@ -45,7 +51,7 @@ public class ReportsActivity extends AppCompatActivity {
         llReportList.removeAllViews();
         llFlagged.removeAllViews();
 
-        Cursor cursor = db.getAttendanceSummary();
+        Cursor cursor = db.getAttendanceSummary(userId);
         boolean anyFlagged = false;
 
         if (cursor.moveToFirst()) {
@@ -163,13 +169,29 @@ public class ReportsActivity extends AppCompatActivity {
     }
 
     private void setupNavigation() {
-        navHome.setOnClickListener(v ->
-                startActivity(new Intent(this, HomeActivity.class)));
-        navAttendance.setOnClickListener(v ->
-                startActivity(new Intent(this, AttendanceActivity.class)));
-        navScanner.setOnClickListener(v ->
-                startActivity(new Intent(this, ScannerActivity.class)));
-        navProfile.setOnClickListener(v ->
-                startActivity(new Intent(this, ProfileActivity.class)));
+        navHome.setOnClickListener(v -> {
+            Intent intent = new Intent(this, HomeActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navAttendance.setOnClickListener(v -> {
+            Intent intent = new Intent(this, AttendanceActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navScanner.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ScannerActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navReports.setOnClickListener(v -> {
+            // already on reports, just refresh
+            loadReports();
+        });
+        navProfile.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ProfileActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
     }
 }

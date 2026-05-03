@@ -10,13 +10,16 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="#CC0000"
-        android:padding="20dp">
+        android:paddingTop="48dp"
+        android:paddingBottom="20dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp">
 
         <TextView
             android:id="@+id/tvWelcome"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Good day, Instructor!"
+            android:text="Good day, Teacher!"
             android:textSize="18sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"/>
@@ -41,6 +44,35 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="16dp">
+
+                <Button
+                    android:id="@+id/btnClockIn"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="CLOCK IN"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:backgroundTint="#16A34A"
+                    android:layout_marginEnd="8dp"/>
+
+                <Button
+                    android:id="@+id/btnClockOut"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="CLOCK OUT"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:backgroundTint="#CC0000"/>
+
+            </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
@@ -207,22 +239,8 @@
             android:orientation="vertical"
             android:gravity="center"
             android:padding="4dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="⌂"
-                android:textSize="20sp"
-                android:textColor="#CC0000"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Home"
-                android:textSize="10sp"
-                android:textColor="#CC0000"
-                android:textStyle="bold"/>
-
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="⌂" android:textSize="20sp" android:textColor="#CC0000"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Home" android:textSize="10sp" android:textColor="#CC0000" android:textStyle="bold"/>
         </LinearLayout>
 
         <LinearLayout
@@ -233,21 +251,8 @@
             android:orientation="vertical"
             android:gravity="center"
             android:padding="4dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="☑"
-                android:textSize="20sp"
-                android:textColor="#555555"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Attendance"
-                android:textSize="10sp"
-                android:textColor="#555555"/>
-
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="☑" android:textSize="20sp" android:textColor="#555555"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Attendance" android:textSize="10sp" android:textColor="#555555"/>
         </LinearLayout>
 
         <LinearLayout
@@ -258,23 +263,8 @@
             android:orientation="vertical"
             android:gravity="center"
             android:padding="4dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="⊡"
-                android:textSize="20sp"
-                android:textColor="#FFFFFF"
-                android:background="#CC0000"
-                android:padding="6dp"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Scanner"
-                android:textSize="10sp"
-                android:textColor="#555555"/>
-
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="⊡" android:textSize="20sp" android:textColor="#FFFFFF" android:background="#CC0000" android:padding="6dp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Scanner" android:textSize="10sp" android:textColor="#555555"/>
         </LinearLayout>
 
         <LinearLayout
@@ -285,21 +275,8 @@
             android:orientation="vertical"
             android:gravity="center"
             android:padding="4dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="≡"
-                android:textSize="20sp"
-                android:textColor="#555555"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Reports"
-                android:textSize="10sp"
-                android:textColor="#555555"/>
-
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="≡" android:textSize="20sp" android:textColor="#555555"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Reports" android:textSize="10sp" android:textColor="#555555"/>
         </LinearLayout>
 
         <LinearLayout
@@ -310,50 +287,8 @@
             android:orientation="vertical"
             android:gravity="center"
             android:padding="4dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="◉"
-                android:textSize="20sp"
-                android:textColor="#555555"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Profile"
-                android:textSize="10sp"
-                android:textColor="#555555"/>
-
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginBottom="16dp">
-
-            <Button
-                android:id="@+id/btnClockIn"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="CLOCK IN"
-                android:textColor="#FFFFFF"
-                android:textStyle="bold"
-                android:backgroundTint="#16A34A"
-                android:layout_marginEnd="8dp"/>
-
-            <Button
-                android:id="@+id/btnClockOut"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="CLOCK OUT"
-                android:textColor="#FFFFFF"
-                android:textStyle="bold"
-                android:backgroundTint="#CC0000"/>
-
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="◉" android:textSize="20sp" android:textColor="#555555"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Profile" android:textSize="10sp" android:textColor="#555555"/>
         </LinearLayout>
 
     </LinearLayout>

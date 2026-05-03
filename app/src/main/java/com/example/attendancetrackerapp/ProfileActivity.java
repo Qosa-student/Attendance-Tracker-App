@@ -5,6 +5,11 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
@@ -25,10 +30,9 @@ import java.io.IOException;
 public class ProfileActivity extends AppCompatActivity {
 
     ImageView imgProfilePic;
-    Button btnChangePic, btnSaveProfile, btnAddClass, btnLogout;
-    EditText etEditName, etEditPassword, etSubjectName, etClassSection;
+    Button btnChangePic, btnSaveProfile, btnLogout, btnDeleteAccount;
+    EditText etEditName, etEditPassword;
     TextView tvProfileName, tvProfileRole, tvInfoEmail;
-    LinearLayout llClassList;
     LinearLayout navHome, navAttendance, navScanner, navReports, navProfile;
     DataBase db;
     int userId;
@@ -66,16 +70,13 @@ public class ProfileActivity extends AppCompatActivity {
         imgProfilePic = findViewById(R.id.imgProfilePic);
         btnChangePic = findViewById(R.id.btnChangePic);
         btnSaveProfile = findViewById(R.id.btnSaveProfile);
-        btnAddClass = findViewById(R.id.btnAddClass);
         btnLogout = findViewById(R.id.btnLogout);
+        btnDeleteAccount = findViewById(R.id.btnDeleteAccount);
         etEditName = findViewById(R.id.etEditName);
         etEditPassword = findViewById(R.id.etEditPassword);
-        etSubjectName = findViewById(R.id.etSubjectName);
-        etClassSection = findViewById(R.id.etClassSection);
         tvProfileName = findViewById(R.id.tvProfileName);
         tvProfileRole = findViewById(R.id.tvProfileRole);
         tvInfoEmail = findViewById(R.id.tvInfoEmail);
-        llClassList = findViewById(R.id.llClassList);
 
         navHome = findViewById(R.id.navHome);
         navAttendance = findViewById(R.id.navAttendance);
@@ -86,18 +87,20 @@ public class ProfileActivity extends AppCompatActivity {
         SharedPreferences prefs = getSharedPreferences(
                 "user_session", MODE_PRIVATE);
         userId = prefs.getInt("user_id", -1);
-        String name = prefs.getString("name", "Instructor");
+        String name = prefs.getString("name", "Teacher");
         String email = prefs.getString("email", "");
-        String role = prefs.getString("role", "instructor");
 
         tvProfileName.setText(name);
-        tvProfileRole.setText(role.substring(0, 1).toUpperCase()
-                + role.substring(1));
+        tvProfileRole.setText("Teacher");
         tvInfoEmail.setText(email);
         etEditName.setText(name);
 
         loadProfilePic();
-        loadClasses();
+
+        navProfile.setOnClickListener(v -> {
+            // already here, just refresh
+            loadProfilePic();
+        });
 
         btnChangePic.setOnClickListener(v ->
                 imagePickerLauncher.launch("image/*"));
@@ -119,36 +122,13 @@ public class ProfileActivity extends AppCompatActivity {
                 editor.putString("name", newName);
                 editor.apply();
                 tvProfileName.setText(newName);
+                loadProfilePic();
                 Toast.makeText(this,
                         "Profile updated!", Toast.LENGTH_SHORT).show();
                 etEditPassword.setText("");
             } else {
                 Toast.makeText(this,
                         "Update failed.", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        btnAddClass.setOnClickListener(v -> {
-            String subject = etSubjectName.getText().toString().trim();
-            String section = etClassSection.getText().toString().trim();
-
-            if (subject.isEmpty() || section.isEmpty()) {
-                Toast.makeText(this,
-                        "Please fill in subject and section",
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            boolean success = db.addClass(subject, section, userId);
-            if (success) {
-                Toast.makeText(this,
-                        "Class added!", Toast.LENGTH_SHORT).show();
-                etSubjectName.setText("");
-                etClassSection.setText("");
-                loadClasses();
-            } else {
-                Toast.makeText(this,
-                        "Failed to add class.", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -162,6 +142,28 @@ public class ProfileActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
+        btnDeleteAccount.setOnClickListener(v -> {
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("Delete Account")
+                    .setMessage("Are you sure you want to permanently delete your account? This will remove all your classes, students, and records.")
+                    .setPositiveButton("Delete", (dialog, which) -> {
+                        if (db.deleteUser(userId)) {
+                            SharedPreferences.Editor editor = prefs.edit();
+                            editor.clear();
+                            editor.apply();
+                            Toast.makeText(this, "Account deleted successfully", Toast.LENGTH_SHORT).show();
+                            Intent intent = new Intent(this, LoginActivity.class);
+                            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
+                                    Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                            startActivity(intent);
+                        } else {
+                            Toast.makeText(this, "Failed to delete account", Toast.LENGTH_SHORT).show();
+                        }
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+        });
+
         setupNavigation();
     }
 
@@ -170,135 +172,79 @@ public class ProfileActivity extends AppCompatActivity {
         if (cursor.moveToFirst()) {
             String pic = cursor.getString(
                     cursor.getColumnIndexOrThrow("profile_pic"));
+            String name = cursor.getString(
+                    cursor.getColumnIndexOrThrow("name"));
+            
             if (pic != null && !pic.isEmpty()) {
                 byte[] bytes = Base64.decode(pic, Base64.DEFAULT);
                 Bitmap bitmap = BitmapFactory.decodeByteArray(
                         bytes, 0, bytes.length);
                 imgProfilePic.setImageBitmap(bitmap);
                 currentProfilePic = pic;
+            } else {
+                // Generate temporary avatar
+                imgProfilePic.setImageBitmap(generateAvatar(name));
             }
         }
         cursor.close();
     }
 
-    private void loadClasses() {
-        llClassList.removeAllViews();
-        Cursor cursor = db.getClassesByInstructor(userId);
-
-        if (cursor.getCount() == 0) {
-            TextView tvNone = new TextView(this);
-            tvNone.setText("No classes added yet.");
-            tvNone.setTextSize(13f);
-            tvNone.setTextColor(0xFF555555);
-            llClassList.addView(tvNone);
-            cursor.close();
-            return;
-        }
-
-        if (cursor.moveToFirst()) {
-            do {
-                int classId = cursor.getInt(
-                        cursor.getColumnIndexOrThrow("id"));
-                String subject = cursor.getString(
-                        cursor.getColumnIndexOrThrow("subject_name"));
-                String section = cursor.getString(
-                        cursor.getColumnIndexOrThrow("section"));
-
-                LinearLayout card = new LinearLayout(this);
-                card.setOrientation(LinearLayout.VERTICAL);
-                card.setBackgroundColor(0xFFF5F5F5);
-                card.setPadding(24, 16, 24, 16);
-                LinearLayout.LayoutParams cardParams =
-                        new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.MATCH_PARENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT);
-                cardParams.setMargins(0, 0, 0, 8);
-                card.setLayoutParams(cardParams);
-
-                LinearLayout topRow = new LinearLayout(this);
-                topRow.setOrientation(LinearLayout.HORIZONTAL);
-                topRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-
-                LinearLayout info = new LinearLayout(this);
-                info.setOrientation(LinearLayout.VERTICAL);
-                LinearLayout.LayoutParams infoParams =
-                        new LinearLayout.LayoutParams(
-                                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-                info.setLayoutParams(infoParams);
-
-                TextView tvSubject = new TextView(this);
-                tvSubject.setText(subject);
-                tvSubject.setTextSize(14f);
-                tvSubject.setTextColor(0xFF000000);
-                tvSubject.setTypeface(null,
-                        android.graphics.Typeface.BOLD);
-
-                TextView tvSection = new TextView(this);
-                tvSection.setText("Section: " + section);
-                tvSection.setTextSize(12f);
-                tvSection.setTextColor(0xFF555555);
-
-                info.addView(tvSubject);
-                info.addView(tvSection);
-
-                Button btnDelete = new Button(this);
-                btnDelete.setText("Remove");
-                btnDelete.setTextSize(11f);
-                btnDelete.setTextColor(0xFFFFFFFF);
-                btnDelete.setBackgroundTintList(
-                        android.content.res.ColorStateList.valueOf(0xFFCC0000));
-                LinearLayout.LayoutParams delParams =
-                        new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT);
-                btnDelete.setLayoutParams(delParams);
-                btnDelete.setOnClickListener(v -> {
-                    db.deleteClass(classId);
-                    loadClasses();
-                    Toast.makeText(this,
-                            "Class removed.", Toast.LENGTH_SHORT).show();
-                });
-
-                Button btnManageStudents = new Button(this);
-                btnManageStudents.setText("Students");
-                btnManageStudents.setTextSize(11f);
-                btnManageStudents.setTextColor(0xFFFFFFFF);
-                btnManageStudents.setBackgroundTintList(
-                        android.content.res.ColorStateList.valueOf(0xFF1A3A8F));
-                LinearLayout.LayoutParams msParams =
-                        new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT);
-                msParams.setMargins(8, 0, 0, 0);
-                btnManageStudents.setLayoutParams(msParams);
-                btnManageStudents.setOnClickListener(v -> {
-                    Intent intent = new Intent(this,
-                            ManageStudentsActivity.class);
-                    intent.putExtra("class_id", classId);
-                    intent.putExtra("class_name",
-                            subject + " - " + section);
-                    startActivity(intent);
-                });
-
-                topRow.addView(info);
-                topRow.addView(btnDelete);
-                topRow.addView(btnManageStudents);
-                card.addView(topRow);
-                llClassList.addView(card);
-
-            } while (cursor.moveToNext());
-        }
-        cursor.close();
+    private Bitmap generateAvatar(String name) {
+        int size = 200;
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        
+        // Background color based on name hash
+        int[] colors = {0xFFF44336, 0xFFE91E63, 0xFF9C27B0, 0xFF673AB7, 0xFF3F51B5, 0xFF2196F3, 0xFF009688, 0xFF4CAF50, 0xFFFF9800, 0xFFFF5722};
+        int color = colors[Math.abs(name.hashCode()) % colors.length];
+        
+        Paint paint = new Paint();
+        paint.setAntiAlias(true);
+        paint.setColor(color);
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint);
+        
+        // Text
+        paint.setColor(Color.WHITE);
+        paint.setTextSize(100);
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setTypeface(Typeface.DEFAULT_BOLD);
+        
+        String initial = name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase();
+        
+        // Center text vertically
+        Rect bounds = new Rect();
+        paint.getTextBounds(initial, 0, 1, bounds);
+        float y = (size / 2f) - bounds.centerY();
+        
+        canvas.drawText(initial, size / 2f, y, paint);
+        
+        return bitmap;
     }
 
     private void setupNavigation() {
-        navHome.setOnClickListener(v ->
-                startActivity(new Intent(this, HomeActivity.class)));
-        navAttendance.setOnClickListener(v ->
-                startActivity(new Intent(this, AttendanceActivity.class)));
-        navScanner.setOnClickListener(v ->
-                startActivity(new Intent(this, ScannerActivity.class)));
-        navReports.setOnClickListener(v ->
-                startActivity(new Intent(this, ReportsActivity.class)));
+        navHome.setOnClickListener(v -> {
+            Intent intent = new Intent(this, HomeActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navAttendance.setOnClickListener(v -> {
+            Intent intent = new Intent(this, AttendanceActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navScanner.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ScannerActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navReports.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ReportsActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navProfile.setOnClickListener(v -> {
+            // already on profile, just refresh
+            loadProfilePic();
+        });
     }
 }

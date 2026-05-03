@@ -9,7 +9,6 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import androidx.appcompat.app.AppCompatActivity;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -22,6 +21,8 @@ public class HomeActivity extends AppCompatActivity {
     LinearLayout llAtRisk;
     LinearLayout navHome, navAttendance, navScanner, navReports, navProfile;
     DataBase db;
+    String todayDb;
+    int userId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,6 +30,18 @@ public class HomeActivity extends AppCompatActivity {
         setContentView(R.layout.activity_home);
 
         db = new DataBase(this);
+        
+        SharedPreferences prefs = getSharedPreferences(
+                "user_session", MODE_PRIVATE);
+        userId = prefs.getInt("user_id", -1);
+
+        // todayDb is for database queries — format: yyyy-MM-dd
+        todayDb = new SimpleDateFormat(
+                "yyyy-MM-dd", Locale.getDefault()).format(new Date());
+
+        // todayDisplay is only for showing to the user
+        String todayDisplay = new SimpleDateFormat(
+                "EEEE, MMMM d, yyyy", Locale.getDefault()).format(new Date());
 
         tvWelcome = findViewById(R.id.tvWelcome);
         tvDate = findViewById(R.id.tvDate);
@@ -44,16 +57,14 @@ public class HomeActivity extends AppCompatActivity {
         navReports = findViewById(R.id.navReports);
         navProfile = findViewById(R.id.navProfile);
 
-        String today = new SimpleDateFormat(
-                "EEEE, MMMM d, yyyy", Locale.getDefault()).format(new Date());
-        tvDate.setText(today);
+        tvDate.setText(todayDisplay);
 
         loadSummary();
         loadAtRisk();
         setupNavigation();
 
-        SharedPreferences prefs = getSharedPreferences("user_session", MODE_PRIVATE);
-        int userId = prefs.getInt("user_id", -1);
+        String userName = prefs.getString("name", "Teacher");
+        tvWelcome.setText("Good day, " + userName + "!");
 
         Button btnClockIn = findViewById(R.id.btnClockIn);
         Button btnClockOut = findViewById(R.id.btnClockOut);
@@ -62,9 +73,7 @@ public class HomeActivity extends AppCompatActivity {
             String time = new SimpleDateFormat(
                     "HH:mm", Locale.getDefault()).format(new Date());
 
-            Cursor record = db.getTeacherRecordForToday(userId, today);
             String expectedStart = "08:00";
-
             Cursor userCursor = db.getUserById(userId);
             if (userCursor.moveToFirst()) {
                 expectedStart = userCursor.getString(
@@ -72,39 +81,56 @@ public class HomeActivity extends AppCompatActivity {
             }
             userCursor.close();
 
-            boolean success = db.clockIn(userId, today, time);
+            boolean success = db.clockIn(userId, todayDb, time);
             if (success) {
                 boolean isLate = time.compareTo(expectedStart) > 0;
                 if (isLate) {
-                    db.adminMarkTeacher(userId, today, "late");
+                    db.updateTeacherAttendanceStatus(userId, todayDb, "late");
                     Toast.makeText(this,
-                            "Clocked in at " + time + " (Late)",
+                            "Clocked in at " + time + " — marked Late",
                             Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(this,
-                            "Clocked in at " + time,
+                            "Clocked in at " + time + " — On Time",
                             Toast.LENGTH_SHORT).show();
                 }
             } else {
                 Toast.makeText(this,
-                        "Already clocked in today.",
+                        "You have already clocked in today.",
                         Toast.LENGTH_SHORT).show();
             }
-            record.close();
         });
 
         btnClockOut.setOnClickListener(v -> {
             String time = new SimpleDateFormat(
                     "HH:mm", Locale.getDefault()).format(new Date());
-            boolean success = db.clockOut(userId, today, time);
+            boolean success = db.clockOut(userId, todayDb, time);
             if (success) {
                 Toast.makeText(this,
                         "Clocked out at " + time,
                         Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this,
-                        "Please clock in first.",
-                        Toast.LENGTH_SHORT).show();
+                // Check if they already clocked out or if they never clocked in
+                Cursor check = db.getTeacherRecordForToday(userId, todayDb);
+                if (check.moveToFirst()) {
+                    String clockIn = check.getString(check.getColumnIndexOrThrow("clock_in"));
+                    String clockOut = check.getString(check.getColumnIndexOrThrow("clock_out"));
+                    
+                    if (clockIn == null || clockIn.isEmpty()) {
+                        Toast.makeText(this,
+                                "Please clock in first before clocking out.",
+                                Toast.LENGTH_SHORT).show();
+                    } else if (clockOut != null && !clockOut.isEmpty()) {
+                        Toast.makeText(this,
+                                "You have already clocked out today.",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(this,
+                            "Please clock in first before clocking out.",
+                            Toast.LENGTH_SHORT).show();
+                }
+                check.close();
             }
         });
     }
@@ -120,7 +146,7 @@ public class HomeActivity extends AppCompatActivity {
         String today = new SimpleDateFormat(
                 "yyyy-MM-dd", Locale.getDefault()).format(new Date());
 
-        Cursor cursor = db.getAttendanceByDate(today);
+        Cursor cursor = db.getAttendanceByDate(today, userId);
 
         int present = 0, absent = 0, late = 0;
 
@@ -147,7 +173,7 @@ public class HomeActivity extends AppCompatActivity {
     private void loadAtRisk() {
         llAtRisk.removeAllViews();
 
-        Cursor cursor = db.getAttendanceSummary();
+        Cursor cursor = db.getAttendanceSummary(userId);
 
         if (cursor.moveToFirst()) {
             do {
@@ -181,8 +207,7 @@ public class HomeActivity extends AppCompatActivity {
                     tvName.setText(name + " — " + studentNumber);
                     tvName.setTextSize(14f);
                     tvName.setTextColor(0xFF991B1B);
-                    tvName.setTypeface(null,
-                            android.graphics.Typeface.BOLD);
+                    tvName.setTypeface(null, android.graphics.Typeface.BOLD);
 
                     TextView tvRate = new TextView(this);
                     tvRate.setText("Attendance rate: " + rate +
@@ -209,36 +234,29 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void setupNavigation() {
-        navAttendance.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivity(new Intent(
-                        HomeActivity.this, AttendanceActivity.class));
-            }
+        navHome.setOnClickListener(v -> {
+            loadSummary();
+            loadAtRisk();
         });
-
-        navScanner.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivity(new Intent(
-                        HomeActivity.this, ScannerActivity.class));
-            }
+        navAttendance.setOnClickListener(v -> {
+            Intent intent = new Intent(this, AttendanceActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
         });
-
-        navReports.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivity(new Intent(
-                        HomeActivity.this, ReportsActivity.class));
-            }
+        navScanner.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ScannerActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
         });
-
-        navProfile.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivity(new Intent(
-                        HomeActivity.this, ProfileActivity.class));
-            }
+        navReports.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ReportsActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navProfile.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ProfileActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
         });
     }
 }

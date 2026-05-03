@@ -32,6 +32,7 @@ public class ManageStudentsActivity extends AppCompatActivity {
         etStudentName = findViewById(R.id.etStudentName);
         btnAddStudent = findViewById(R.id.btnAddStudent);
         llStudentList = findViewById(R.id.llStudentList);
+        findViewById(R.id.btnBack).setOnClickListener(v -> finish());
 
         TextView tvTitle = findViewById(R.id.tvManageTitle);
         tvTitle.setText(className);
@@ -64,8 +65,8 @@ public class ManageStudentsActivity extends AppCompatActivity {
                 loadStudents();
             } else {
                 Toast.makeText(this,
-                        "Student number already exists.",
-                        Toast.LENGTH_SHORT).show();
+                        "This ID number has already been used, please re-enter another ID number",
+                        Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -92,6 +93,8 @@ public class ManageStudentsActivity extends AppCompatActivity {
                         cursor.getColumnIndexOrThrow("name"));
                 String number = cursor.getString(
                         cursor.getColumnIndexOrThrow("student_number"));
+                String dateAdded = cursor.getString(
+                        cursor.getColumnIndexOrThrow("date_added"));
 
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
@@ -122,8 +125,18 @@ public class ManageStudentsActivity extends AppCompatActivity {
                 tvNumber.setTextSize(12f);
                 tvNumber.setTextColor(0xFF555555);
 
+                TextView tvDate = new TextView(this);
+                if (dateAdded != null) {
+                    tvDate.setText("Added: " + dateAdded);
+                } else {
+                    tvDate.setText("Added: Prior to tracking");
+                }
+                tvDate.setTextSize(10f);
+                tvDate.setTextColor(0xFF888888);
+
                 info.addView(tvName);
                 info.addView(tvNumber);
+                info.addView(tvDate);
 
                 Button btnRemove = new Button(this);
                 btnRemove.setText("Remove");

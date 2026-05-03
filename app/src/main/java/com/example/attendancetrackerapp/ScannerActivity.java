@@ -24,7 +24,9 @@ public class ScannerActivity extends AppCompatActivity {
     TextView tvScanName, tvScanId;
     DataBase db;
     int foundStudentId = -1;
+    String foundClassName = "";
     String today;
+    int userId;
 
     ActivityResultLauncher<ScanOptions> scanLauncher =
             registerForActivityResult(new ScanContract(), result -> {
@@ -40,6 +42,11 @@ public class ScannerActivity extends AppCompatActivity {
         setContentView(R.layout.activity_scanner);
 
         db = new DataBase(this);
+        
+        android.content.SharedPreferences prefs = getSharedPreferences(
+                "user_session", MODE_PRIVATE);
+        userId = prefs.getInt("user_id", -1);
+        
         today = new SimpleDateFormat(
                 "yyyy-MM-dd", Locale.getDefault()).format(new Date());
 
@@ -80,7 +87,7 @@ public class ScannerActivity extends AppCompatActivity {
 
     private void processScannedId(String scannedId) {
         llScanResult.setVisibility(View.VISIBLE);
-        Cursor cursor = db.findStudentByNumber(scannedId);
+        Cursor cursor = db.findStudentByNumber(scannedId, userId);
 
         if (cursor.getCount() > 0) {
             cursor.moveToFirst();
@@ -90,6 +97,11 @@ public class ScannerActivity extends AppCompatActivity {
                     cursor.getColumnIndexOrThrow("name"));
             String studentNumber = cursor.getString(
                     cursor.getColumnIndexOrThrow("student_number"));
+            String subject = cursor.getString(
+                    cursor.getColumnIndexOrThrow("subject_name"));
+            String section = cursor.getString(
+                    cursor.getColumnIndexOrThrow("section"));
+            foundClassName = subject + " - " + section;
             String batch = studentNumber.substring(0, 4);
 
             tvScanName.setText(name);
@@ -98,6 +110,7 @@ public class ScannerActivity extends AppCompatActivity {
             llScanError.setVisibility(View.GONE);
         } else {
             foundStudentId = -1;
+            foundClassName = "";
             llScanFound.setVisibility(View.GONE);
             llScanError.setVisibility(View.VISIBLE);
         }
@@ -110,7 +123,12 @@ public class ScannerActivity extends AppCompatActivity {
                     "No valid student scanned.", Toast.LENGTH_SHORT).show();
             return;
         }
-        boolean success = db.markAttendance(foundStudentId, today, status);
+        
+        android.content.SharedPreferences prefs = getSharedPreferences("user_session", MODE_PRIVATE);
+        String tName = prefs.getString("name", "Teacher");
+        String sName = tvScanName.getText().toString();
+
+        boolean success = db.markAttendance(foundStudentId, sName, foundClassName, userId, tName, today, status);
         if (success) {
             Toast.makeText(this,
                     "Marked as " + status + "!", Toast.LENGTH_SHORT).show();
@@ -118,16 +136,17 @@ public class ScannerActivity extends AppCompatActivity {
             llScanFound.setVisibility(View.GONE);
             llScanError.setVisibility(View.GONE);
             foundStudentId = -1;
+            foundClassName = "";
             loadScannedList();
         } else {
             Toast.makeText(this,
-                    "Already marked today.", Toast.LENGTH_SHORT).show();
+                    "Failed to mark attendance.", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void loadScannedList() {
         llScannedList.removeAllViews();
-        Cursor cursor = db.getAttendanceByDate(today);
+        Cursor cursor = db.getAttendanceByDate(today, userId);
 
         if (cursor.moveToFirst()) {
             do {
@@ -177,13 +196,32 @@ public class ScannerActivity extends AppCompatActivity {
     }
 
     private void setupNavigation() {
-        navHome.setOnClickListener(v ->
-                startActivity(new Intent(this, HomeActivity.class)));
-        navAttendance.setOnClickListener(v ->
-                startActivity(new Intent(this, AttendanceActivity.class)));
-        navReports.setOnClickListener(v ->
-                startActivity(new Intent(this, ReportsActivity.class)));
-        navProfile.setOnClickListener(v ->
-                startActivity(new Intent(this, ProfileActivity.class)));
+        navHome.setOnClickListener(v -> {
+            Intent intent = new Intent(this, HomeActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navAttendance.setOnClickListener(v -> {
+            Intent intent = new Intent(this, AttendanceActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navScanner.setOnClickListener(v -> {
+            // already on scanner, just reset the scan result
+            llScanResult.setVisibility(View.GONE);
+            llScanFound.setVisibility(View.GONE);
+            llScanError.setVisibility(View.GONE);
+            foundStudentId = -1;
+        });
+        navReports.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ReportsActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navProfile.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ProfileActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
     }
 }

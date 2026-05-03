@@ -10,7 +10,10 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="#CC0000"
-        android:padding="20dp">
+        android:paddingTop="48dp"
+        android:paddingBottom="20dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp">
 
         <TextView
             android:layout_width="wrap_content"
@@ -233,7 +236,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Enter Student ID Number"
+            android:text="Search Student by Name or ID"
             android:textSize="13sp"
             android:textColor="#CC0000"
             android:textStyle="bold"
@@ -243,7 +246,7 @@
             android:id="@+id/etStudentId"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="e.g. 2024-0001"
+            android:hint="Enter name or ID (e.g. 2024-0001)"
             android:inputType="text"
             android:padding="14dp"
             android:textSize="15sp"
@@ -255,10 +258,18 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Format: YYYY-XXXX"
+            android:text="Select the correct student from results below"
             android:textSize="11sp"
             android:textColor="#888888"
             android:layout_marginBottom="12dp"/>
+
+        <LinearLayout
+            android:id="@+id/llSearchResults"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="10dp"
+            android:visibility="gone"/>
 
         <LinearLayout
             android:id="@+id/llStudentFound"
@@ -269,6 +280,14 @@
             android:padding="14dp"
             android:layout_marginBottom="10dp"
             android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Selected Student:"
+                android:textSize="11sp"
+                android:textColor="#166534"
+                android:textStyle="bold"/>
 
             <TextView
                 android:id="@+id/tvFoundName"
@@ -395,7 +414,7 @@
 
         <LinearLayout android:id="@+id/navAttendance" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="4dp">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="☑" android:textSize="20sp" android:textColor="#CC0000"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Classes" android:textSize="10sp" android:textColor="#CC0000" android:textStyle="bold"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Attendance" android:textSize="10sp" android:textColor="#CC0000" android:textStyle="bold"/>
         </LinearLayout>
 
         <LinearLayout android:id="@+id/navScanner" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center" android:padding="4dp">

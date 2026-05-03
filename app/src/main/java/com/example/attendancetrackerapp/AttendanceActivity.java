@@ -3,6 +3,7 @@ package com.example.attendancetrackerapp;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -25,7 +26,7 @@ import java.util.Locale;
 public class AttendanceActivity extends AppCompatActivity {
 
     LinearLayout layoutClasses, layoutManual, layoutTypeId;
-    LinearLayout llClassList, llStudentList, llMarkedList;
+    LinearLayout llClassList, llStudentList, llMarkedList, llSearchResults;
     LinearLayout llStudentFound, llNotFound;
     LinearLayout navHome, navAttendance, navScanner, navReports, navProfile;
     Button btnTabClasses, btnTabAttendance, btnTabTypeId;
@@ -40,6 +41,8 @@ public class AttendanceActivity extends AppCompatActivity {
     int foundStudentId = -1;
     String today;
     HashMap<Integer, String> attendanceMap = new HashMap<>();
+    HashMap<Integer, String> studentNamesCache = new HashMap<>();
+    HashMap<Integer, String> classNamesCache = new HashMap<>();
     ArrayList<String> classNames = new ArrayList<>();
     ArrayList<Integer> classIds = new ArrayList<>();
 
@@ -67,6 +70,7 @@ public class AttendanceActivity extends AppCompatActivity {
         llClassList = findViewById(R.id.llClassList);
         llStudentList = findViewById(R.id.llStudentList);
         llMarkedList = findViewById(R.id.llMarkedList);
+        llSearchResults = findViewById(R.id.llSearchResults);
         llStudentFound = findViewById(R.id.llStudentFound);
         llNotFound = findViewById(R.id.llNotFound);
         btnTabClasses = findViewById(R.id.btnTabClasses);
@@ -127,9 +131,19 @@ public class AttendanceActivity extends AppCompatActivity {
                         Toast.LENGTH_SHORT).show();
                 return;
             }
+            
+            String teacherName = prefs.getString("name", "Teacher");
+            String className = "";
+            if (selectedClassId != -1) {
+                className = spinnerClass.getSelectedItem().toString();
+            }
+
             for (HashMap.Entry<Integer, String> entry :
                     attendanceMap.entrySet()) {
-                db.markAttendance(entry.getKey(), today, entry.getValue());
+                int sid = entry.getKey();
+                String status = entry.getValue();
+                String sname = studentNamesCache.get(sid);
+                db.markAttendance(sid, sname, className, userId, teacherName, today, status);
             }
             Toast.makeText(this,
                     "Attendance saved!", Toast.LENGTH_SHORT).show();
@@ -150,7 +164,7 @@ public class AttendanceActivity extends AppCompatActivity {
 
     private void loadClasses() {
         llClassList.removeAllViews();
-        Cursor cursor = db.getClassesByInstructor(userId);
+        Cursor cursor = db.getClassesByTeacher(userId);
 
         if (cursor.getCount() == 0) {
             TextView tvNone = new TextView(this);
@@ -266,7 +280,7 @@ public class AttendanceActivity extends AppCompatActivity {
         classNames.add("-- Select Class --");
         classIds.add(-1);
 
-        Cursor cursor = db.getClassesByInstructor(userId);
+        Cursor cursor = db.getClassesByTeacher(userId);
         if (cursor.moveToFirst()) {
             do {
                 int id = cursor.getInt(cursor.getColumnIndexOrThrow("id"));
@@ -312,6 +326,8 @@ public class AttendanceActivity extends AppCompatActivity {
                         cursor.getColumnIndexOrThrow("student_number"));
                 int sid = cursor.getInt(
                         cursor.getColumnIndexOrThrow("id"));
+                
+                studentNamesCache.put(sid, name);
 
                 if (!query.isEmpty() &&
                         !name.toLowerCase().contains(query.toLowerCase()) &&
@@ -364,7 +380,12 @@ public class AttendanceActivity extends AppCompatActivity {
                     btn.setAlpha(attendanceMap.containsKey(sid) &&
                             attendanceMap.get(sid).equals(status) ? 1f : 0.4f);
                     btn.setOnClickListener(v -> {
-                        attendanceMap.put(sid, status);
+                        if (attendanceMap.containsKey(sid) && 
+                            attendanceMap.get(sid).equals(status)) {
+                            attendanceMap.remove(sid);
+                        } else {
+                            attendanceMap.put(sid, status);
+                        }
                         loadStudentList(etSearch.getText().toString());
                     });
                     buttons.addView(btn);
@@ -393,29 +414,70 @@ public class AttendanceActivity extends AppCompatActivity {
                     CharSequence s, int a, int b, int c) {}
             @Override public void onTextChanged(
                     CharSequence s, int a, int b, int c) {
-                String id = s.toString().trim();
-                if (id.length() >= 9) {
-                    Cursor cursor = db.findStudentByNumber(id);
+                String query = s.toString().trim();
+                if (query.length() >= 2) {
+                    llSearchResults.removeAllViews();
+                    llSearchResults.setVisibility(View.VISIBLE);
+                    
+                    // Search in database by name OR student number (Filtered by current teacher)
+                    SQLiteDatabase sdb = db.getReadableDatabase();
+                    Cursor cursor = sdb.rawQuery(
+                        "SELECT s.*, c.subject_name, c.section FROM students s " +
+                        "JOIN classes c ON s.class_id = c.id " +
+                        "WHERE (s.name LIKE ? OR s.student_number LIKE ?) AND c.teacher_id=?",
+                        new String[]{"%" + query + "%", "%" + query + "%", String.valueOf(userId)});
+
                     if (cursor.getCount() > 0) {
-                        cursor.moveToFirst();
-                        foundStudentId = cursor.getInt(
-                                cursor.getColumnIndexOrThrow("id"));
-                        String name = cursor.getString(
-                                cursor.getColumnIndexOrThrow("name"));
-                        String num = cursor.getString(
-                                cursor.getColumnIndexOrThrow("student_number"));
-                        tvFoundName.setText(name);
-                        tvFoundId.setText(num + " · Batch " +
-                                num.substring(0, 4));
-                        llStudentFound.setVisibility(View.VISIBLE);
                         llNotFound.setVisibility(View.GONE);
+                        while (cursor.moveToNext()) {
+                            int sid = cursor.getInt(cursor.getColumnIndexOrThrow("id"));
+                            String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                            String num = cursor.getString(cursor.getColumnIndexOrThrow("student_number"));
+                            String subject = cursor.getString(cursor.getColumnIndexOrThrow("subject_name"));
+                            String section = cursor.getString(cursor.getColumnIndexOrThrow("section"));
+
+                            LinearLayout row = new LinearLayout(AttendanceActivity.this);
+                            row.setOrientation(LinearLayout.VERTICAL);
+                            row.setPadding(20, 20, 20, 20);
+                            row.setBackgroundColor(0xFFF9FAFB);
+                            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                            lp.setMargins(0, 0, 0, 4);
+                            row.setLayoutParams(lp);
+
+                            TextView tvMain = new TextView(AttendanceActivity.this);
+                            tvMain.setText(name + " (" + num + ")");
+                            tvMain.setTextSize(14f);
+                            tvMain.setTextColor(0xFF111827);
+                            tvMain.setTypeface(null, android.graphics.Typeface.BOLD);
+
+                            TextView tvSub = new TextView(AttendanceActivity.this);
+                            tvSub.setText(subject + " - " + section);
+                            tvSub.setTextSize(12f);
+                            tvSub.setTextColor(0xFF6B7280);
+
+                            row.addView(tvMain);
+                            row.addView(tvSub);
+
+                            row.setOnClickListener(v -> {
+                                foundStudentId = sid;
+                                tvFoundName.setText(name);
+                                tvFoundId.setText(num + " | " + subject);
+                                classNamesCache.put(sid, subject + " - " + section);
+                                llStudentFound.setVisibility(View.VISIBLE);
+                                llSearchResults.setVisibility(View.GONE);
+                                etStudentId.setText("");
+                            });
+
+                            llSearchResults.addView(row);
+                        }
                     } else {
-                        foundStudentId = -1;
-                        llStudentFound.setVisibility(View.GONE);
                         llNotFound.setVisibility(View.VISIBLE);
+                        llStudentFound.setVisibility(View.GONE);
                     }
                     cursor.close();
                 } else {
+                    llSearchResults.setVisibility(View.GONE);
                     llStudentFound.setVisibility(View.GONE);
                     llNotFound.setVisibility(View.GONE);
                     foundStudentId = -1;
@@ -435,7 +497,14 @@ public class AttendanceActivity extends AppCompatActivity {
                     "No valid student found.", Toast.LENGTH_SHORT).show();
             return;
         }
-        boolean success = db.markAttendance(foundStudentId, today, status);
+        
+        SharedPreferences prefs = getSharedPreferences("user_session", MODE_PRIVATE);
+        String tName = prefs.getString("name", "Teacher");
+        String sName = tvFoundName.getText().toString();
+        String cName = classNamesCache.get(foundStudentId);
+        if (cName == null) cName = "";
+
+        boolean success = db.markAttendance(foundStudentId, sName, cName, userId, tName, today, status);
         if (success) {
             Toast.makeText(this,
                     "Marked as " + status + "!", Toast.LENGTH_SHORT).show();
@@ -445,13 +514,13 @@ public class AttendanceActivity extends AppCompatActivity {
             loadMarkedList();
         } else {
             Toast.makeText(this,
-                    "Already marked today.", Toast.LENGTH_SHORT).show();
+                    "Failed to mark attendance.", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void loadMarkedList() {
         llMarkedList.removeAllViews();
-        Cursor cursor = db.getAttendanceByDate(today);
+        Cursor cursor = db.getAttendanceByDate(today, userId);
         if (cursor.moveToFirst()) {
             do {
                 String name = cursor.getString(
@@ -529,13 +598,29 @@ public class AttendanceActivity extends AppCompatActivity {
     }
 
     private void setupNavigation() {
-        navHome.setOnClickListener(v ->
-                startActivity(new Intent(this, HomeActivity.class)));
-        navScanner.setOnClickListener(v ->
-                startActivity(new Intent(this, ScannerActivity.class)));
-        navReports.setOnClickListener(v ->
-                startActivity(new Intent(this, ReportsActivity.class)));
-        navProfile.setOnClickListener(v ->
-                startActivity(new Intent(this, ProfileActivity.class)));
+        navHome.setOnClickListener(v -> {
+            Intent intent = new Intent(this, HomeActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navAttendance.setOnClickListener(v -> {
+            loadClasses();
+            setupClassSpinner();
+        });
+        navScanner.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ScannerActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navReports.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ReportsActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        navProfile.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ProfileActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
     }
 }

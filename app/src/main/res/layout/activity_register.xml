@@ -116,24 +116,6 @@
             android:background="#F5F5F5"
             android:layout_marginBottom="16dp"/>
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Role"
-            android:textSize="13sp"
-            android:textColor="#CC0000"
-            android:textStyle="bold"
-            android:layout_marginBottom="4dp"/>
-
-        <Spinner
-            android:id="@+id/spinnerRole"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:padding="14dp"
-            android:textSize="14sp"
-            android:background="#F5F5F5"
-            android:layout_marginBottom="24dp"/>
-
         <Button
             android:id="@+id/btnRegister"
             android:layout_width="match_parent"

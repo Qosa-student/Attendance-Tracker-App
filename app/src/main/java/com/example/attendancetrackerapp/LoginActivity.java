@@ -49,27 +49,29 @@ public class LoginActivity extends AppCompatActivity {
                     String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
                     String savedEmail = cursor.getString(
                             cursor.getColumnIndexOrThrow("email"));
-                    String role = cursor.getString(cursor.getColumnIndexOrThrow("role"));
 
                     SharedPreferences.Editor editor = getSharedPreferences(
                             "user_session", MODE_PRIVATE).edit();
                     editor.putInt("user_id", id);
                     editor.putString("name", name);
                     editor.putString("email", savedEmail);
-                    editor.putString("role", role);
                     editor.apply();
 
                     Toast.makeText(LoginActivity.this,
                             "Login successful!", Toast.LENGTH_SHORT).show();
 
-                    if (role.equals("admin")) {
-                        startActivity(new Intent(
-                                LoginActivity.this, AdminDashboardActivity.class));
-                    } else {
-                        startActivity(new Intent(
-                                LoginActivity.this, HomeActivity.class));
-                    }
+                    startActivity(new Intent(
+                            LoginActivity.this, HomeActivity.class));
                     finish();
+                } else {
+                    // Check if the account is even registered
+                    if (db.isEmailRegistered(email)) {
+                        Toast.makeText(LoginActivity.this,
+                                "Invalid password. Please try again.", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(LoginActivity.this,
+                                "The account the user inputted is not registered.", Toast.LENGTH_LONG).show();
+                    }
                 }
                 cursor.close();
             }
