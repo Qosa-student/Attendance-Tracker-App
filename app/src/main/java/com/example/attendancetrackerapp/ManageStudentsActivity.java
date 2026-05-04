@@ -1,21 +1,23 @@
 package com.example.attendancetrackerapp;
 
-import android.database.Cursor;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import java.util.List;
+import okhttp3.ResponseBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class ManageStudentsActivity extends AppCompatActivity {
 
     EditText etStudentNumber, etStudentName;
     Button btnAddStudent;
     LinearLayout llStudentList;
-    DataBase db;
     int classId;
     String className;
 
@@ -24,7 +26,6 @@ public class ManageStudentsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_manage_students);
 
-        db = new DataBase(this);
         classId = getIntent().getIntExtra("class_id", -1);
         className = getIntent().getStringExtra("class_name");
 
@@ -37,135 +38,114 @@ public class ManageStudentsActivity extends AppCompatActivity {
         TextView tvTitle = findViewById(R.id.tvManageTitle);
         tvTitle.setText(className);
 
-        loadStudents();
+        loadStudentsOnline();
 
         btnAddStudent.setOnClickListener(v -> {
             String number = etStudentNumber.getText().toString().trim();
             String name = etStudentName.getText().toString().trim();
 
             if (number.isEmpty() || name.isEmpty()) {
-                Toast.makeText(this,
-                        "Please fill in all fields", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Fill in all fields", Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            if (!number.matches("\\d{4}-\\d{4}")) {
-                Toast.makeText(this,
-                        "ID format must be YYYY-XXXX (e.g. 2024-0001)",
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
+            ApiService.create().addStudent(name, number, classId).enqueue(new Callback<>() {
+                @Override
+                public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                    try {
+                        if (response.isSuccessful() && response.body() != null) {
+                            String result = response.body().string();
+                            org.json.JSONObject json = new org.json.JSONObject(result);
+                            String status = json.getString("status");
+                            String message = json.getString("message");
 
-            boolean success = db.addStudentToClass(number, name, classId);
-            if (success) {
-                Toast.makeText(this,
-                        "Student added!", Toast.LENGTH_SHORT).show();
-                etStudentNumber.setText("");
-                etStudentName.setText("");
-                loadStudents();
-            } else {
-                Toast.makeText(this,
-                        "This ID number has already been used, please re-enter another ID number",
-                        Toast.LENGTH_LONG).show();
+                            if (status.equals("success")) {
+                                Toast.makeText(ManageStudentsActivity.this, message, Toast.LENGTH_SHORT).show();
+                                etStudentNumber.setText("");
+                                etStudentName.setText("");
+                                loadStudentsOnline();
+                            } else {
+                                Toast.makeText(ManageStudentsActivity.this, message, Toast.LENGTH_LONG).show();
+                            }
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+                @Override
+                public void onFailure(Call<ResponseBody> call, Throwable t) {
+                    Toast.makeText(ManageStudentsActivity.this, "Network error", Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
+    }
+
+    private void loadStudentsOnline() {
+        ApiService.create().getStudents(classId).enqueue(new Callback<>() {
+            @Override
+            public void onResponse(Call<List<ApiService.StudentModel>> call, Response<List<ApiService.StudentModel>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    renderStudentList(response.body());
+                }
+            }
+            @Override
+            public void onFailure(Call<List<ApiService.StudentModel>> call, Throwable t) {
+                Toast.makeText(ManageStudentsActivity.this, "Failed to load students", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
-    private void loadStudents() {
+    private void renderStudentList(List<ApiService.StudentModel> students) {
         llStudentList.removeAllViews();
-        Cursor cursor = db.getStudentsByClass(classId);
-
-        if (cursor.getCount() == 0) {
+        if (students.isEmpty()) {
             TextView tvNone = new TextView(this);
-            tvNone.setText("No students in this class yet.");
-            tvNone.setTextSize(13f);
-            tvNone.setTextColor(0xFF555555);
+            tvNone.setText("No students yet.");
             llStudentList.addView(tvNone);
-            cursor.close();
             return;
         }
 
-        if (cursor.moveToFirst()) {
-            do {
-                int studentId = cursor.getInt(
-                        cursor.getColumnIndexOrThrow("id"));
-                String name = cursor.getString(
-                        cursor.getColumnIndexOrThrow("name"));
-                String number = cursor.getString(
-                        cursor.getColumnIndexOrThrow("student_number"));
-                String dateAdded = cursor.getString(
-                        cursor.getColumnIndexOrThrow("date_added"));
+        for (ApiService.StudentModel sm : students) {
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(16, 16, 16, 16);
+            card.setBackgroundColor(0xFFF5F5F5);
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
+            cp.setMargins(0, 0, 0, 8);
+            card.setLayoutParams(cp);
 
-                LinearLayout row = new LinearLayout(this);
-                row.setOrientation(LinearLayout.HORIZONTAL);
-                row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-                row.setPadding(0, 10, 0, 10);
-                LinearLayout.LayoutParams rowParams =
-                        new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.MATCH_PARENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT);
-                rowParams.setMargins(0, 0, 0, 4);
-                row.setLayoutParams(rowParams);
+            TextView tvName = new TextView(this);
+            tvName.setText(sm.name);
+            tvName.setTypeface(null, android.graphics.Typeface.BOLD);
 
-                LinearLayout info = new LinearLayout(this);
-                info.setOrientation(LinearLayout.VERTICAL);
-                LinearLayout.LayoutParams infoParams =
-                        new LinearLayout.LayoutParams(
-                                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-                info.setLayoutParams(infoParams);
+            TextView tvNum = new TextView(this);
+            tvNum.setText(sm.student_number);
 
-                TextView tvName = new TextView(this);
-                tvName.setText(name);
-                tvName.setTextSize(14f);
-                tvName.setTextColor(0xFF000000);
-                tvName.setTypeface(null, android.graphics.Typeface.BOLD);
+            Button btnRemove = new Button(this);
+            btnRemove.setText("Remove");
+            btnRemove.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFCC0000));
+            btnRemove.setTextColor(0xFFFFFFFF);
+            btnRemove.setOnClickListener(v -> {
+                deleteStudentOnline(sm.id);
+            });
 
-                TextView tvNumber = new TextView(this);
-                tvNumber.setText(number);
-                tvNumber.setTextSize(12f);
-                tvNumber.setTextColor(0xFF555555);
-
-                TextView tvDate = new TextView(this);
-                if (dateAdded != null) {
-                    tvDate.setText("Added: " + dateAdded);
-                } else {
-                    tvDate.setText("Added: Prior to tracking");
-                }
-                tvDate.setTextSize(10f);
-                tvDate.setTextColor(0xFF888888);
-
-                info.addView(tvName);
-                info.addView(tvNumber);
-                info.addView(tvDate);
-
-                Button btnRemove = new Button(this);
-                btnRemove.setText("Remove");
-                btnRemove.setTextSize(11f);
-                btnRemove.setTextColor(0xFFFFFFFF);
-                btnRemove.setBackgroundTintList(
-                        android.content.res.ColorStateList.valueOf(0xFFCC0000));
-                btnRemove.setOnClickListener(v -> {
-                    db.deleteStudentFromClass(studentId);
-                    loadStudents();
-                    Toast.makeText(this,
-                            "Student removed.", Toast.LENGTH_SHORT).show();
-                });
-
-                row.addView(info);
-                row.addView(btnRemove);
-
-                View divider = new View(this);
-                divider.setBackgroundColor(0xFFEEEEEE);
-                LinearLayout.LayoutParams divParams =
-                        new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.MATCH_PARENT, 1);
-                divider.setLayoutParams(divParams);
-
-                llStudentList.addView(row);
-                llStudentList.addView(divider);
-
-            } while (cursor.moveToNext());
+            card.addView(tvName);
+            card.addView(tvNum);
+            card.addView(btnRemove);
+            llStudentList.addView(card);
         }
-        cursor.close();
+    }
+
+    private void deleteStudentOnline(int studentId) {
+        ApiService.create().deleteStudent(studentId).enqueue(new Callback<>() {
+            @Override
+            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                if (response.isSuccessful()) {
+                    Toast.makeText(ManageStudentsActivity.this, "Student removed", Toast.LENGTH_SHORT).show();
+                    loadStudentsOnline();
+                }
+            }
+            @Override
+            public void onFailure(Call<ResponseBody> call, Throwable t) {}
+        });
     }
 }

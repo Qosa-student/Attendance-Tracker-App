@@ -2,10 +2,7 @@ package com.example.attendancetrackerapp;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.database.Cursor;
 import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -13,6 +10,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class HomeActivity extends AppCompatActivity {
 
@@ -20,7 +20,6 @@ public class HomeActivity extends AppCompatActivity {
             tvAbsentCount, tvLateCount, tvRateCount;
     LinearLayout llAtRisk;
     LinearLayout navHome, navAttendance, navScanner, navReports, navProfile;
-    DataBase db;
     String todayDb;
     int userId;
 
@@ -29,17 +28,13 @@ public class HomeActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
 
-        db = new DataBase(this);
-        
         SharedPreferences prefs = getSharedPreferences(
                 "user_session", MODE_PRIVATE);
         userId = prefs.getInt("user_id", -1);
 
-        // todayDb is for database queries — format: yyyy-MM-dd
         todayDb = new SimpleDateFormat(
                 "yyyy-MM-dd", Locale.getDefault()).format(new Date());
 
-        // todayDisplay is only for showing to the user
         String todayDisplay = new SimpleDateFormat(
                 "EEEE, MMMM d, yyyy", Locale.getDefault()).format(new Date());
 
@@ -59,204 +54,92 @@ public class HomeActivity extends AppCompatActivity {
 
         tvDate.setText(todayDisplay);
 
-        loadSummary();
-        loadAtRisk();
+        loadDashboardData();
         setupNavigation();
 
         String userName = prefs.getString("name", "Teacher");
-        tvWelcome.setText("Good day, " + userName + "!");
-
-        Button btnClockIn = findViewById(R.id.btnClockIn);
-        Button btnClockOut = findViewById(R.id.btnClockOut);
-
-        btnClockIn.setOnClickListener(v -> {
-            String time = new SimpleDateFormat(
-                    "HH:mm", Locale.getDefault()).format(new Date());
-
-            String expectedStart = "08:00";
-            Cursor userCursor = db.getUserById(userId);
-            if (userCursor.moveToFirst()) {
-                expectedStart = userCursor.getString(
-                        userCursor.getColumnIndexOrThrow("expected_start"));
-            }
-            userCursor.close();
-
-            boolean success = db.clockIn(userId, todayDb, time);
-            if (success) {
-                boolean isLate = time.compareTo(expectedStart) > 0;
-                if (isLate) {
-                    db.updateTeacherAttendanceStatus(userId, todayDb, "late");
-                    Toast.makeText(this,
-                            "Clocked in at " + time + " — marked Late",
-                            Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(this,
-                            "Clocked in at " + time + " — On Time",
-                            Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                Toast.makeText(this,
-                        "You have already clocked in today.",
-                        Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        btnClockOut.setOnClickListener(v -> {
-            String time = new SimpleDateFormat(
-                    "HH:mm", Locale.getDefault()).format(new Date());
-            boolean success = db.clockOut(userId, todayDb, time);
-            if (success) {
-                Toast.makeText(this,
-                        "Clocked out at " + time,
-                        Toast.LENGTH_SHORT).show();
-            } else {
-                // Check if they already clocked out or if they never clocked in
-                Cursor check = db.getTeacherRecordForToday(userId, todayDb);
-                if (check.moveToFirst()) {
-                    String clockIn = check.getString(check.getColumnIndexOrThrow("clock_in"));
-                    String clockOut = check.getString(check.getColumnIndexOrThrow("clock_out"));
-                    
-                    if (clockIn == null || clockIn.isEmpty()) {
-                        Toast.makeText(this,
-                                "Please clock in first before clocking out.",
-                                Toast.LENGTH_SHORT).show();
-                    } else if (clockOut != null && !clockOut.isEmpty()) {
-                        Toast.makeText(this,
-                                "You have already clocked out today.",
-                                Toast.LENGTH_SHORT).show();
-                    }
-                } else {
-                    Toast.makeText(this,
-                            "Please clock in first before clocking out.",
-                            Toast.LENGTH_SHORT).show();
-                }
-                check.close();
-            }
-        });
+        tvWelcome.setText(String.format("Good day, %s!", userName));
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        loadSummary();
-        loadAtRisk();
+        loadDashboardData();
     }
 
-    private void loadSummary() {
-        String today = new SimpleDateFormat(
-                "yyyy-MM-dd", Locale.getDefault()).format(new Date());
+    private void loadDashboardData() {
+        ApiService.create().getSummary(userId, todayDb).enqueue(new Callback<>() {
+            @Override
+            public void onResponse(Call<ApiService.SummaryModel> call, Response<ApiService.SummaryModel> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    ApiService.SummaryModel summary = response.body();
+                    
+                    tvPresentCount.setText(String.valueOf(summary.present));
+                    tvAbsentCount.setText(String.valueOf(summary.absent));
+                    tvLateCount.setText(String.valueOf(summary.late));
+                    
+                    int total = summary.present + summary.absent + summary.late;
+                    int rate = total > 0 ? Math.round((summary.present * 100f) / total) : 0;
+                    tvRateCount.setText(String.format(Locale.getDefault(), "%d%%", rate));
 
-        Cursor cursor = db.getAttendanceByDate(today, userId);
-
-        int present = 0, absent = 0, late = 0;
-
-        if (cursor.moveToFirst()) {
-            do {
-                String status = cursor.getString(
-                        cursor.getColumnIndexOrThrow("status"));
-                if (status.equals("present")) present++;
-                else if (status.equals("absent")) absent++;
-                else if (status.equals("late")) late++;
-            } while (cursor.moveToNext());
-        }
-        cursor.close();
-
-        int total = present + absent + late;
-        int rate = total > 0 ? Math.round((present * 100f) / total) : 0;
-
-        tvPresentCount.setText(String.valueOf(present));
-        tvAbsentCount.setText(String.valueOf(absent));
-        tvLateCount.setText(String.valueOf(late));
-        tvRateCount.setText(rate + "%");
-    }
-
-    private void loadAtRisk() {
-        llAtRisk.removeAllViews();
-
-        Cursor cursor = db.getAttendanceSummary(userId);
-
-        if (cursor.moveToFirst()) {
-            do {
-                String name = cursor.getString(
-                        cursor.getColumnIndexOrThrow("name"));
-                String studentNumber = cursor.getString(
-                        cursor.getColumnIndexOrThrow("student_number"));
-                int presentCount = cursor.getInt(
-                        cursor.getColumnIndexOrThrow("present_count"));
-                int totalCount = cursor.getInt(
-                        cursor.getColumnIndexOrThrow("total_count"));
-
-                if (totalCount == 0) continue;
-
-                int rate = Math.round((presentCount * 100f) / totalCount);
-
-                if (rate < 75) {
-                    LinearLayout card = new LinearLayout(this);
-                    card.setOrientation(LinearLayout.VERTICAL);
-                    card.setBackgroundColor(0xFFFEF2F2);
-                    card.setPadding(24, 16, 24, 16);
-
-                    LinearLayout.LayoutParams params =
-                            new LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.MATCH_PARENT,
-                                    LinearLayout.LayoutParams.WRAP_CONTENT);
-                    params.setMargins(0, 0, 0, 8);
-                    card.setLayoutParams(params);
-
-                    TextView tvName = new TextView(this);
-                    tvName.setText(name + " — " + studentNumber);
-                    tvName.setTextSize(14f);
-                    tvName.setTextColor(0xFF991B1B);
-                    tvName.setTypeface(null, android.graphics.Typeface.BOLD);
-
-                    TextView tvRate = new TextView(this);
-                    tvRate.setText("Attendance rate: " + rate +
-                            "% — below 75% threshold");
-                    tvRate.setTextSize(12f);
-                    tvRate.setTextColor(0xFFB91C1C);
-
-                    card.addView(tvName);
-                    card.addView(tvRate);
-                    llAtRisk.addView(card);
+                    updateAtRiskUI(summary.at_risk);
                 }
+            }
 
-            } while (cursor.moveToNext());
-        }
-        cursor.close();
+            @Override
+            public void onFailure(Call<ApiService.SummaryModel> call, Throwable t) {
+                Toast.makeText(HomeActivity.this, "Failed to load dashboard data", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
 
-        if (llAtRisk.getChildCount() == 0) {
+    private void updateAtRiskUI(java.util.List<ApiService.AtRiskModel> atRiskList) {
+        llAtRisk.removeAllViews();
+        
+        if (atRiskList == null || atRiskList.isEmpty()) {
             TextView tvNone = new TextView(this);
             tvNone.setText("No at-risk students right now.");
             tvNone.setTextSize(13f);
             tvNone.setTextColor(0xFF555555);
             llAtRisk.addView(tvNone);
+            return;
+        }
+
+        for (ApiService.AtRiskModel student : atRiskList) {
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackgroundColor(0xFFFEF2F2);
+            card.setPadding(24, 16, 24, 16);
+
+            LinearLayout.LayoutParams params =
+                    new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT);
+            params.setMargins(0, 0, 0, 8);
+            card.setLayoutParams(params);
+
+            TextView tvName = new TextView(this);
+            tvName.setText(String.format("%s — %s", student.name, student.student_number));
+            tvName.setTextSize(14f);
+            tvName.setTextColor(0xFF991B1B);
+            tvName.setTypeface(null, android.graphics.Typeface.BOLD);
+
+            TextView tvRate = new TextView(this);
+            tvRate.setText(String.format(Locale.getDefault(), "Attendance rate: %d%% — below 75%% threshold", student.rate));
+            tvRate.setTextSize(12f);
+            tvRate.setTextColor(0xFFB91C1C);
+
+            card.addView(tvName);
+            card.addView(tvRate);
+            llAtRisk.addView(card);
         }
     }
 
     private void setupNavigation() {
-        navHome.setOnClickListener(v -> {
-            loadSummary();
-            loadAtRisk();
-        });
-        navAttendance.setOnClickListener(v -> {
-            Intent intent = new Intent(this, AttendanceActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(intent);
-        });
-        navScanner.setOnClickListener(v -> {
-            Intent intent = new Intent(this, ScannerActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(intent);
-        });
-        navReports.setOnClickListener(v -> {
-            Intent intent = new Intent(this, ReportsActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(intent);
-        });
-        navProfile.setOnClickListener(v -> {
-            Intent intent = new Intent(this, ProfileActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(intent);
-        });
+        navHome.setOnClickListener(v -> loadDashboardData());
+        navAttendance.setOnClickListener(v -> startActivity(new Intent(this, AttendanceActivity.class)));
+        navScanner.setOnClickListener(v -> startActivity(new Intent(this, ScannerActivity.class)));
+        navReports.setOnClickListener(v -> startActivity(new Intent(this, ReportsActivity.class)));
+        navProfile.setOnClickListener(v -> startActivity(new Intent(this, ProfileActivity.class)));
     }
 }

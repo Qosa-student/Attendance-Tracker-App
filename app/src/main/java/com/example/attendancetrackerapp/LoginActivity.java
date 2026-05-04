@@ -1,7 +1,6 @@
 package com.example.attendancetrackerapp;
 
 import android.content.Intent;
-import android.database.Cursor;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -11,19 +10,22 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import android.content.SharedPreferences;
 
+import okhttp3.ResponseBody;
+import org.json.JSONObject;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
 public class LoginActivity extends AppCompatActivity {
 
     EditText etEmail, etPassword;
     Button btnLogin;
     TextView tvRegister;
-    DataBase db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
-
-        db = new DataBase(this);
 
         etEmail = findViewById(R.id.etEmail);
         etPassword = findViewById(R.id.etPassword);
@@ -42,38 +44,7 @@ public class LoginActivity extends AppCompatActivity {
                     return;
                 }
 
-                Cursor cursor = db.loginUser(email, password);
-                if (cursor.getCount() > 0) {
-                    cursor.moveToFirst();
-                    int id = cursor.getInt(cursor.getColumnIndexOrThrow("id"));
-                    String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-                    String savedEmail = cursor.getString(
-                            cursor.getColumnIndexOrThrow("email"));
-
-                    SharedPreferences.Editor editor = getSharedPreferences(
-                            "user_session", MODE_PRIVATE).edit();
-                    editor.putInt("user_id", id);
-                    editor.putString("name", name);
-                    editor.putString("email", savedEmail);
-                    editor.apply();
-
-                    Toast.makeText(LoginActivity.this,
-                            "Login successful!", Toast.LENGTH_SHORT).show();
-
-                    startActivity(new Intent(
-                            LoginActivity.this, HomeActivity.class));
-                    finish();
-                } else {
-                    // Check if the account is even registered
-                    if (db.isEmailRegistered(email)) {
-                        Toast.makeText(LoginActivity.this,
-                                "Invalid password. Please try again.", Toast.LENGTH_SHORT).show();
-                    } else {
-                        Toast.makeText(LoginActivity.this,
-                                "The account the user inputted is not registered.", Toast.LENGTH_LONG).show();
-                    }
-                }
-                cursor.close();
+                loginUserOnline(email, password);
             }
         });
 
@@ -82,6 +53,53 @@ public class LoginActivity extends AppCompatActivity {
             public void onClick(View v) {
                 Intent intent = new Intent(LoginActivity.this, RegisterActivity.class);
                 startActivity(intent);
+            }
+        });
+    }
+
+    private void loginUserOnline(String email, String password) {
+        ApiService apiService = ApiService.create();
+        apiService.loginUser(email, password).enqueue(new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                try {
+                    if (response.isSuccessful() && response.body() != null) {
+                        String result = response.body().string();
+                        JSONObject json = new JSONObject(result);
+                        String status = json.getString("status");
+                        String message = json.getString("message");
+
+                        if (status.equals("success")) {
+                            JSONObject user = json.getJSONObject("user");
+                            int id = user.getInt("id");
+                            String name = user.getString("name");
+                            String userEmail = user.getString("email");
+
+                            SharedPreferences.Editor editor = getSharedPreferences(
+                                    "user_session", MODE_PRIVATE).edit();
+                            editor.putInt("user_id", id);
+                            editor.putString("name", name);
+                            editor.putString("email", userEmail);
+                            editor.apply();
+
+                            Toast.makeText(LoginActivity.this, "Login successful!", Toast.LENGTH_SHORT).show();
+                            startActivity(new Intent(LoginActivity.this, HomeActivity.class));
+                            finish();
+                        } else {
+                            Toast.makeText(LoginActivity.this, message, Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        Toast.makeText(LoginActivity.this, "Server error", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    Toast.makeText(LoginActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ResponseBody> call, Throwable t) {
+                Toast.makeText(LoginActivity.this, "Network error: " + t.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
     }

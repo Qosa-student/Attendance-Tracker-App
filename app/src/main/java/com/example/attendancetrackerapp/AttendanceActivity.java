@@ -2,8 +2,6 @@ package com.example.attendancetrackerapp;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -21,58 +19,50 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import okhttp3.ResponseBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class AttendanceActivity extends AppCompatActivity {
 
     LinearLayout layoutClasses, layoutManual, layoutTypeId;
-    LinearLayout llClassList, llStudentList, llMarkedList, llSearchResults;
-    LinearLayout llStudentFound, llNotFound;
+    LinearLayout llClassList, llStudentList;
     LinearLayout navHome, navAttendance, navScanner, navReports, navProfile;
     Button btnTabClasses, btnTabAttendance, btnTabTypeId;
     Button btnAddClass, btnSaveAttendance;
     Button btnMarkPresent, btnMarkAbsent, btnMarkLate;
     EditText etSubjectName, etSection, etSearch, etStudentId;
-    TextView tvAttendanceDate, tvFoundName, tvFoundId;
+    TextView tvAttendanceDate;
     Spinner spinnerClass;
-    DataBase db;
     int userId;
     int selectedClassId = -1;
-    int foundStudentId = -1;
     String today;
     HashMap<Integer, String> attendanceMap = new HashMap<>();
     HashMap<Integer, String> studentNamesCache = new HashMap<>();
-    HashMap<Integer, String> classNamesCache = new HashMap<>();
-    ArrayList<String> classNames = new ArrayList<>();
-    ArrayList<Integer> classIds = new ArrayList<>();
+    List<ApiService.ClassModel> classesList = new ArrayList<>();
+    List<String> classDisplayNames = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_attendance);
 
-        db = new DataBase(this);
-        today = new SimpleDateFormat(
-                "yyyy-MM-dd", Locale.getDefault()).format(new Date());
+        today = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
 
-        SharedPreferences prefs = getSharedPreferences(
-                "user_session", MODE_PRIVATE);
+        SharedPreferences prefs = getSharedPreferences("user_session", MODE_PRIVATE);
         userId = prefs.getInt("user_id", -1);
 
         tvAttendanceDate = findViewById(R.id.tvAttendanceDate);
-        tvAttendanceDate.setText(new SimpleDateFormat(
-                "EEEE, MMMM d, yyyy",
-                Locale.getDefault()).format(new Date()));
+        tvAttendanceDate.setText(new SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(new Date()));
 
         layoutClasses = findViewById(R.id.layoutClasses);
         layoutManual = findViewById(R.id.layoutManual);
         layoutTypeId = findViewById(R.id.layoutTypeId);
         llClassList = findViewById(R.id.llClassList);
         llStudentList = findViewById(R.id.llStudentList);
-        llMarkedList = findViewById(R.id.llMarkedList);
-        llSearchResults = findViewById(R.id.llSearchResults);
-        llStudentFound = findViewById(R.id.llStudentFound);
-        llNotFound = findViewById(R.id.llNotFound);
         btnTabClasses = findViewById(R.id.btnTabClasses);
         btnTabAttendance = findViewById(R.id.btnTabAttendance);
         btnTabTypeId = findViewById(R.id.btnTabTypeId);
@@ -85,8 +75,6 @@ public class AttendanceActivity extends AppCompatActivity {
         etSection = findViewById(R.id.etSection);
         etSearch = findViewById(R.id.etSearch);
         etStudentId = findViewById(R.id.etStudentId);
-        tvFoundName = findViewById(R.id.tvFoundName);
-        tvFoundId = findViewById(R.id.tvFoundId);
         spinnerClass = findViewById(R.id.spinnerClass);
 
         navHome = findViewById(R.id.navHome);
@@ -95,9 +83,8 @@ public class AttendanceActivity extends AppCompatActivity {
         navReports = findViewById(R.id.navReports);
         navProfile = findViewById(R.id.navProfile);
 
-        loadClasses();
+        loadClassesOnline();
         setupTabs();
-        setupClassSpinner();
         setupTypeId();
         setupNavigation();
 
@@ -105,466 +92,246 @@ public class AttendanceActivity extends AppCompatActivity {
             String subject = etSubjectName.getText().toString().trim();
             String section = etSection.getText().toString().trim();
             if (subject.isEmpty() || section.isEmpty()) {
-                Toast.makeText(this,
-                        "Please fill in subject and section",
-                        Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Fill in subject and section", Toast.LENGTH_SHORT).show();
                 return;
             }
-            boolean success = db.addClass(subject, section, userId);
-            if (success) {
-                Toast.makeText(this,
-                        "Class added!", Toast.LENGTH_SHORT).show();
-                etSubjectName.setText("");
-                etSection.setText("");
-                loadClasses();
-                setupClassSpinner();
-            } else {
-                Toast.makeText(this,
-                        "Failed to add class.", Toast.LENGTH_SHORT).show();
-            }
+            ApiService.create().addClass(subject, section, userId).enqueue(new Callback<>() {
+                @Override
+                public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                    if (response.isSuccessful()) {
+                        Toast.makeText(AttendanceActivity.this, "Class added!", Toast.LENGTH_SHORT).show();
+                        etSubjectName.setText("");
+                        etSection.setText("");
+                        loadClassesOnline();
+                    }
+                }
+                @Override
+                public void onFailure(Call<ResponseBody> call, Throwable t) {
+                    Toast.makeText(AttendanceActivity.this, "Failed to add class", Toast.LENGTH_SHORT).show();
+                }
+            });
         });
 
         btnSaveAttendance.setOnClickListener(v -> {
             if (attendanceMap.isEmpty()) {
-                Toast.makeText(this,
-                        "No attendance marked yet.",
-                        Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "No attendance marked", Toast.LENGTH_SHORT).show();
                 return;
             }
-            
-            String teacherName = prefs.getString("name", "Teacher");
-            String className = "";
-            if (selectedClassId != -1) {
-                className = spinnerClass.getSelectedItem().toString();
-            }
-
-            for (HashMap.Entry<Integer, String> entry :
-                    attendanceMap.entrySet()) {
-                int sid = entry.getKey();
-                String status = entry.getValue();
-                String sname = studentNamesCache.get(sid);
-                db.markAttendance(sid, sname, className, userId, teacherName, today, status);
-            }
-            Toast.makeText(this,
-                    "Attendance saved!", Toast.LENGTH_SHORT).show();
-            attendanceMap.clear();
-            loadStudentList("");
+            saveAttendanceOnline();
         });
 
         etSearch.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(
-                    CharSequence s, int a, int b, int c) {}
-            @Override public void onTextChanged(
-                    CharSequence s, int a, int b, int c) {
-                loadStudentList(s.toString().trim());
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                renderStudentList(s.toString().trim());
             }
             @Override public void afterTextChanged(Editable s) {}
         });
     }
 
-    private void loadClasses() {
-        llClassList.removeAllViews();
-        Cursor cursor = db.getClassesByTeacher(userId);
+    private void loadClassesOnline() {
+        ApiService.create().getClasses(userId).enqueue(new Callback<>() {
+            @Override
+            public void onResponse(Call<List<ApiService.ClassModel>> call, Response<List<ApiService.ClassModel>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    classesList = response.body();
+                    updateClassListUI();
+                    setupClassSpinner();
+                }
+            }
+            @Override
+            public void onFailure(Call<List<ApiService.ClassModel>> call, Throwable t) {
+                Toast.makeText(AttendanceActivity.this, "Failed to load classes", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
 
-        if (cursor.getCount() == 0) {
+    private void updateClassListUI() {
+        llClassList.removeAllViews();
+        if (classesList.isEmpty()) {
             TextView tvNone = new TextView(this);
-            tvNone.setText("No classes yet. Add your first class above.");
-            tvNone.setTextSize(13f);
-            tvNone.setTextColor(0xFF555555);
+            tvNone.setText("No classes yet.");
             llClassList.addView(tvNone);
-            cursor.close();
             return;
         }
 
-        if (cursor.moveToFirst()) {
-            do {
-                int classId = cursor.getInt(
-                        cursor.getColumnIndexOrThrow("id"));
-                String subject = cursor.getString(
-                        cursor.getColumnIndexOrThrow("subject_name"));
-                String section = cursor.getString(
-                        cursor.getColumnIndexOrThrow("section"));
+        for (ApiService.ClassModel cm : classesList) {
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackgroundColor(0xFFF5F5F5);
+            card.setPadding(24, 16, 24, 16);
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
+            cp.setMargins(0, 0, 0, 10);
+            card.setLayoutParams(cp);
 
-                LinearLayout card = new LinearLayout(this);
-                card.setOrientation(LinearLayout.VERTICAL);
-                card.setBackgroundColor(0xFFF5F5F5);
-                card.setPadding(24, 16, 24, 16);
-                LinearLayout.LayoutParams cp =
-                        new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.MATCH_PARENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT);
-                cp.setMargins(0, 0, 0, 10);
-                card.setLayoutParams(cp);
+            TextView tvSubject = new TextView(this);
+            tvSubject.setText(cm.subject_name);
+            tvSubject.setTypeface(null, android.graphics.Typeface.BOLD);
+            
+            TextView tvSection = new TextView(this);
+            tvSection.setText("Section: " + cm.section);
 
-                LinearLayout topRow = new LinearLayout(this);
-                topRow.setOrientation(LinearLayout.HORIZONTAL);
-                topRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            LinearLayout buttonRow = new LinearLayout(this);
+            buttonRow.setOrientation(LinearLayout.HORIZONTAL);
+            buttonRow.setPadding(0, 8, 0, 0);
 
-                LinearLayout info = new LinearLayout(this);
-                info.setOrientation(LinearLayout.VERTICAL);
-                LinearLayout.LayoutParams ip =
-                        new LinearLayout.LayoutParams(
-                                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-                info.setLayoutParams(ip);
+            Button btnStudents = new Button(this);
+            btnStudents.setText("Students");
+            btnStudents.setOnClickListener(v -> {
+                Intent intent = new Intent(this, ManageStudentsActivity.class);
+                intent.putExtra("class_id", cm.id);
+                intent.putExtra("class_name", cm.subject_name + " - " + cm.section);
+                startActivity(intent);
+            });
 
-                TextView tvSubject = new TextView(this);
-                tvSubject.setText(subject);
-                tvSubject.setTextSize(14f);
-                tvSubject.setTextColor(0xFF000000);
-                tvSubject.setTypeface(null,
-                        android.graphics.Typeface.BOLD);
+            Button btnDelete = new Button(this);
+            btnDelete.setText("Delete");
+            btnDelete.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFCC0000));
+            btnDelete.setTextColor(0xFFFFFFFF);
+            btnDelete.setOnClickListener(v -> {
+                deleteClassOnline(cm.id);
+            });
 
-                TextView tvSection = new TextView(this);
-                tvSection.setText("Section: " + section);
-                tvSection.setTextSize(12f);
-                tvSection.setTextColor(0xFF555555);
+            buttonRow.addView(btnStudents);
+            buttonRow.addView(btnDelete);
 
-                info.addView(tvSubject);
-                info.addView(tvSection);
-
-                Button btnStudents = new Button(this);
-                btnStudents.setText("Students");
-                btnStudents.setTextSize(11f);
-                btnStudents.setTextColor(0xFFFFFFFF);
-                btnStudents.setBackgroundTintList(
-                        android.content.res.ColorStateList.valueOf(0xFF1A3A8F));
-                LinearLayout.LayoutParams sp =
-                        new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT);
-                sp.setMargins(8, 0, 0, 0);
-                btnStudents.setLayoutParams(sp);
-                btnStudents.setOnClickListener(v -> {
-                    Intent intent = new Intent(this,
-                            ManageStudentsActivity.class);
-                    intent.putExtra("class_id", classId);
-                    intent.putExtra("class_name",
-                            subject + " - " + section);
-                    startActivity(intent);
-                });
-
-                Button btnDelete = new Button(this);
-                btnDelete.setText("Delete");
-                btnDelete.setTextSize(11f);
-                btnDelete.setTextColor(0xFFFFFFFF);
-                btnDelete.setBackgroundTintList(
-                        android.content.res.ColorStateList.valueOf(0xFFCC0000));
-                LinearLayout.LayoutParams dp =
-                        new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT);
-                dp.setMargins(8, 0, 0, 0);
-                btnDelete.setLayoutParams(dp);
-                btnDelete.setOnClickListener(v -> {
-                    db.deleteClass(classId);
-                    Toast.makeText(this,
-                            "Class deleted.", Toast.LENGTH_SHORT).show();
-                    loadClasses();
-                    setupClassSpinner();
-                });
-
-                topRow.addView(info);
-                topRow.addView(btnStudents);
-                topRow.addView(btnDelete);
-                card.addView(topRow);
-                llClassList.addView(card);
-
-            } while (cursor.moveToNext());
+            card.addView(tvSubject);
+            card.addView(tvSection);
+            card.addView(buttonRow);
+            llClassList.addView(card);
         }
-        cursor.close();
+    }
+
+    private void deleteClassOnline(int classId) {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Delete Class")
+                .setMessage("Delete this class and all its students?")
+                .setPositiveButton("Delete", (d, w) -> {
+                    ApiService.create().deleteClass(classId).enqueue(new Callback<>() {
+                        @Override
+                        public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                            if (response.isSuccessful()) {
+                                Toast.makeText(AttendanceActivity.this, "Class deleted", Toast.LENGTH_SHORT).show();
+                                loadClassesOnline();
+                            }
+                        }
+                        @Override
+                        public void onFailure(Call<ResponseBody> call, Throwable t) {}
+                    });
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private void setupClassSpinner() {
-        classNames.clear();
-        classIds.clear();
-        classNames.add("-- Select Class --");
-        classIds.add(-1);
-
-        Cursor cursor = db.getClassesByTeacher(userId);
-        if (cursor.moveToFirst()) {
-            do {
-                int id = cursor.getInt(cursor.getColumnIndexOrThrow("id"));
-                String subject = cursor.getString(
-                        cursor.getColumnIndexOrThrow("subject_name"));
-                String section = cursor.getString(
-                        cursor.getColumnIndexOrThrow("section"));
-                classIds.add(id);
-                classNames.add(subject + " - " + section);
-            } while (cursor.moveToNext());
+        classDisplayNames.clear();
+        classDisplayNames.add("-- Select Class --");
+        for (ApiService.ClassModel cm : classesList) {
+            classDisplayNames.add(cm.subject_name + " - " + cm.section);
         }
-        cursor.close();
 
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                this, android.R.layout.simple_spinner_item, classNames);
-        adapter.setDropDownViewResource(
-                android.R.layout.simple_spinner_dropdown_item);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, classDisplayNames);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerClass.setAdapter(adapter);
 
-        spinnerClass.setOnItemSelectedListener(
-                new AdapterView.OnItemSelectedListener() {
-                    @Override
-                    public void onItemSelected(AdapterView<?> parent,
-                                               View view, int position, long id) {
-                        selectedClassId = classIds.get(position);
-                        loadStudentList("");
-                    }
-                    @Override
-                    public void onNothingSelected(AdapterView<?> parent) {}
-                });
+        spinnerClass.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (position == 0) {
+                    selectedClassId = -1;
+                    llStudentList.removeAllViews();
+                } else {
+                    selectedClassId = classesList.get(position - 1).id;
+                    loadStudentsOnline();
+                }
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
     }
 
-    private void loadStudentList(String query) {
-        llStudentList.removeAllViews();
+    private List<ApiService.StudentModel> currentStudents = new ArrayList<>();
+
+    private void loadStudentsOnline() {
         if (selectedClassId == -1) return;
-
-        Cursor cursor = db.getStudentsByClass(selectedClassId);
-        if (cursor.moveToFirst()) {
-            do {
-                String name = cursor.getString(
-                        cursor.getColumnIndexOrThrow("name"));
-                String number = cursor.getString(
-                        cursor.getColumnIndexOrThrow("student_number"));
-                int sid = cursor.getInt(
-                        cursor.getColumnIndexOrThrow("id"));
-                
-                studentNamesCache.put(sid, name);
-
-                if (!query.isEmpty() &&
-                        !name.toLowerCase().contains(query.toLowerCase()) &&
-                        !number.contains(query)) continue;
-
-                LinearLayout row = new LinearLayout(this);
-                row.setOrientation(LinearLayout.HORIZONTAL);
-                row.setPadding(0, 12, 0, 12);
-                row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-
-                LinearLayout info = new LinearLayout(this);
-                info.setOrientation(LinearLayout.VERTICAL);
-                LinearLayout.LayoutParams ip =
-                        new LinearLayout.LayoutParams(
-                                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-                info.setLayoutParams(ip);
-
-                TextView tvName = new TextView(this);
-                tvName.setText(name);
-                tvName.setTextSize(13f);
-                tvName.setTextColor(0xFF000000);
-                tvName.setTypeface(null, android.graphics.Typeface.BOLD);
-
-                TextView tvNum = new TextView(this);
-                tvNum.setText(number);
-                tvNum.setTextSize(11f);
-                tvNum.setTextColor(0xFF555555);
-
-                info.addView(tvName);
-                info.addView(tvNum);
-
-                LinearLayout buttons = new LinearLayout(this);
-                String[] labels = {"P", "A", "L"};
-                String[] statuses = {"present", "absent", "late"};
-                int[] colors = {0xFF16A34A, 0xFFCC0000, 0xFFD97706};
-
-                for (int i = 0; i < 3; i++) {
-                    final String status = statuses[i];
-                    Button btn = new Button(this);
-                    btn.setText(labels[i]);
-                    btn.setTextColor(0xFFFFFFFF);
-                    btn.setTextSize(11f);
-                    LinearLayout.LayoutParams bp =
-                            new LinearLayout.LayoutParams(80, 80);
-                    bp.setMargins(4, 0, 0, 0);
-                    btn.setLayoutParams(bp);
-                    btn.setBackgroundTintList(
-                            android.content.res.ColorStateList.valueOf(
-                                    colors[i]));
-                    btn.setAlpha(attendanceMap.containsKey(sid) &&
-                            attendanceMap.get(sid).equals(status) ? 1f : 0.4f);
-                    btn.setOnClickListener(v -> {
-                        if (attendanceMap.containsKey(sid) && 
-                            attendanceMap.get(sid).equals(status)) {
-                            attendanceMap.remove(sid);
-                        } else {
-                            attendanceMap.put(sid, status);
-                        }
-                        loadStudentList(etSearch.getText().toString());
-                    });
-                    buttons.addView(btn);
+        ApiService.create().getStudents(selectedClassId).enqueue(new Callback<>() {
+            @Override
+            public void onResponse(Call<List<ApiService.StudentModel>> call, Response<List<ApiService.StudentModel>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    currentStudents = response.body();
+                    renderStudentList("");
                 }
+            }
+            @Override
+            public void onFailure(Call<List<ApiService.StudentModel>> call, Throwable t) {}
+        });
+    }
 
-                row.addView(info);
-                row.addView(buttons);
+    private void renderStudentList(String query) {
+        llStudentList.removeAllViews();
+        for (ApiService.StudentModel sm : currentStudents) {
+            if (!query.isEmpty() && !sm.name.toLowerCase().contains(query.toLowerCase()) && !sm.student_number.contains(query)) continue;
+            
+            studentNamesCache.put(sm.id, sm.name);
+            
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setPadding(0, 12, 0, 12);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
-                View divider = new View(this);
-                divider.setBackgroundColor(0xFFEEEEEE);
-                LinearLayout.LayoutParams divParams =
-                        new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.MATCH_PARENT, 1);
-                divider.setLayoutParams(divParams);
+            TextView tvInfo = new TextView(this);
+            tvInfo.setText(sm.name + " (" + sm.student_number + ")");
+            tvInfo.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1f));
 
-                llStudentList.addView(row);
-                llStudentList.addView(divider);
-            } while (cursor.moveToNext());
+            LinearLayout buttons = new LinearLayout(this);
+            String[] statuses = {"present", "absent", "late"};
+            int[] colors = {0xFF16A34A, 0xFFCC0000, 0xFFD97706};
+            String[] labels = {"P", "A", "L"};
+
+            for (int i = 0; i < 3; i++) {
+                final String status = statuses[i];
+                Button btn = new Button(this);
+                btn.setText(labels[i]);
+                btn.setLayoutParams(new LinearLayout.LayoutParams(100, 100));
+                btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(colors[i]));
+                btn.setAlpha(attendanceMap.containsKey(sm.id) && status.equals(attendanceMap.get(sm.id)) ? 1f : 0.4f);
+                btn.setOnClickListener(v -> {
+                    attendanceMap.put(sm.id, status);
+                    renderStudentList(etSearch.getText().toString());
+                });
+                buttons.addView(btn);
+            }
+            row.addView(tvInfo);
+            row.addView(buttons);
+            llStudentList.addView(row);
         }
-        cursor.close();
+    }
+
+    private void saveAttendanceOnline() {
+        SharedPreferences prefs = getSharedPreferences("user_session", MODE_PRIVATE);
+        String tName = prefs.getString("name", "Teacher");
+        String className = spinnerClass.getSelectedItem().toString();
+
+        attendanceMap.forEach((studentId, status) -> {
+            ApiService.create().markAttendance(studentId, studentNamesCache.get(studentId), 
+                className, userId, tName, today, status).enqueue(new Callback<>() {
+                    @Override public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {}
+                    @Override public void onFailure(Call<ResponseBody> call, Throwable t) {}
+                });
+        });
+        Toast.makeText(this, "Attendance sent to server!", Toast.LENGTH_SHORT).show();
+        attendanceMap.clear();
+        loadStudentsOnline();
     }
 
     private void setupTypeId() {
         etStudentId.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(
-                    CharSequence s, int a, int b, int c) {}
-            @Override public void onTextChanged(
-                    CharSequence s, int a, int b, int c) {
-                String query = s.toString().trim();
-                if (query.length() >= 2) {
-                    llSearchResults.removeAllViews();
-                    llSearchResults.setVisibility(View.VISIBLE);
-                    
-                    // Search in database by name OR student number (Filtered by current teacher)
-                    SQLiteDatabase sdb = db.getReadableDatabase();
-                    Cursor cursor = sdb.rawQuery(
-                        "SELECT s.*, c.subject_name, c.section FROM students s " +
-                        "JOIN classes c ON s.class_id = c.id " +
-                        "WHERE (s.name LIKE ? OR s.student_number LIKE ?) AND c.teacher_id=?",
-                        new String[]{"%" + query + "%", "%" + query + "%", String.valueOf(userId)});
-
-                    if (cursor.getCount() > 0) {
-                        llNotFound.setVisibility(View.GONE);
-                        while (cursor.moveToNext()) {
-                            int sid = cursor.getInt(cursor.getColumnIndexOrThrow("id"));
-                            String name = cursor.getString(cursor.getColumnIndexOrThrow("name"));
-                            String num = cursor.getString(cursor.getColumnIndexOrThrow("student_number"));
-                            String subject = cursor.getString(cursor.getColumnIndexOrThrow("subject_name"));
-                            String section = cursor.getString(cursor.getColumnIndexOrThrow("section"));
-
-                            LinearLayout row = new LinearLayout(AttendanceActivity.this);
-                            row.setOrientation(LinearLayout.VERTICAL);
-                            row.setPadding(20, 20, 20, 20);
-                            row.setBackgroundColor(0xFFF9FAFB);
-                            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                            lp.setMargins(0, 0, 0, 4);
-                            row.setLayoutParams(lp);
-
-                            TextView tvMain = new TextView(AttendanceActivity.this);
-                            tvMain.setText(name + " (" + num + ")");
-                            tvMain.setTextSize(14f);
-                            tvMain.setTextColor(0xFF111827);
-                            tvMain.setTypeface(null, android.graphics.Typeface.BOLD);
-
-                            TextView tvSub = new TextView(AttendanceActivity.this);
-                            tvSub.setText(subject + " - " + section);
-                            tvSub.setTextSize(12f);
-                            tvSub.setTextColor(0xFF6B7280);
-
-                            row.addView(tvMain);
-                            row.addView(tvSub);
-
-                            row.setOnClickListener(v -> {
-                                foundStudentId = sid;
-                                tvFoundName.setText(name);
-                                tvFoundId.setText(num + " | " + subject);
-                                classNamesCache.put(sid, subject + " - " + section);
-                                llStudentFound.setVisibility(View.VISIBLE);
-                                llSearchResults.setVisibility(View.GONE);
-                                etStudentId.setText("");
-                            });
-
-                            llSearchResults.addView(row);
-                        }
-                    } else {
-                        llNotFound.setVisibility(View.VISIBLE);
-                        llStudentFound.setVisibility(View.GONE);
-                    }
-                    cursor.close();
-                } else {
-                    llSearchResults.setVisibility(View.GONE);
-                    llStudentFound.setVisibility(View.GONE);
-                    llNotFound.setVisibility(View.GONE);
-                    foundStudentId = -1;
-                }
-            }
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void afterTextChanged(Editable s) {}
         });
 
-        btnMarkPresent.setOnClickListener(v -> markFromTypeId("present"));
-        btnMarkAbsent.setOnClickListener(v -> markFromTypeId("absent"));
-        btnMarkLate.setOnClickListener(v -> markFromTypeId("late"));
-    }
-
-    private void markFromTypeId(String status) {
-        if (foundStudentId == -1) {
-            Toast.makeText(this,
-                    "No valid student found.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
-        SharedPreferences prefs = getSharedPreferences("user_session", MODE_PRIVATE);
-        String tName = prefs.getString("name", "Teacher");
-        String sName = tvFoundName.getText().toString();
-        String cName = classNamesCache.get(foundStudentId);
-        if (cName == null) cName = "";
-
-        boolean success = db.markAttendance(foundStudentId, sName, cName, userId, tName, today, status);
-        if (success) {
-            Toast.makeText(this,
-                    "Marked as " + status + "!", Toast.LENGTH_SHORT).show();
-            etStudentId.setText("");
-            llStudentFound.setVisibility(View.GONE);
-            foundStudentId = -1;
-            loadMarkedList();
-        } else {
-            Toast.makeText(this,
-                    "Failed to mark attendance.", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void loadMarkedList() {
-        llMarkedList.removeAllViews();
-        Cursor cursor = db.getAttendanceByDate(today, userId);
-        if (cursor.moveToFirst()) {
-            do {
-                String name = cursor.getString(
-                        cursor.getColumnIndexOrThrow("name"));
-                String number = cursor.getString(
-                        cursor.getColumnIndexOrThrow("student_number"));
-                String status = cursor.getString(
-                        cursor.getColumnIndexOrThrow("status"));
-
-                LinearLayout row = new LinearLayout(this);
-                row.setOrientation(LinearLayout.HORIZONTAL);
-                row.setPadding(0, 8, 0, 8);
-                row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-
-                TextView tvInfo = new TextView(this);
-                tvInfo.setText(name + " · " + number);
-                tvInfo.setTextSize(13f);
-                tvInfo.setTextColor(0xFF000000);
-                LinearLayout.LayoutParams p =
-                        new LinearLayout.LayoutParams(
-                                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-                tvInfo.setLayoutParams(p);
-
-                TextView tvStatus = new TextView(this);
-                tvStatus.setText(status.toUpperCase());
-                tvStatus.setTextSize(11f);
-                tvStatus.setPadding(12, 4, 12, 4);
-                if (status.equals("present")) {
-                    tvStatus.setBackgroundColor(0xFFDCFCE7);
-                    tvStatus.setTextColor(0xFF15803D);
-                } else if (status.equals("absent")) {
-                    tvStatus.setBackgroundColor(0xFFFEE2E2);
-                    tvStatus.setTextColor(0xFFB91C1C);
-                } else {
-                    tvStatus.setBackgroundColor(0xFFFEF9C3);
-                    tvStatus.setTextColor(0xFFA16207);
-                }
-
-                row.addView(tvInfo);
-                row.addView(tvStatus);
-                llMarkedList.addView(row);
-            } while (cursor.moveToNext());
-        }
-        cursor.close();
+        btnMarkPresent.setOnClickListener(v -> Toast.makeText(this, "Please use seating or manual list", Toast.LENGTH_SHORT).show());
     }
 
     private void setupTabs() {
@@ -578,49 +345,28 @@ public class AttendanceActivity extends AppCompatActivity {
         layoutManual.setVisibility(tab == 1 ? View.VISIBLE : View.GONE);
         layoutTypeId.setVisibility(tab == 2 ? View.VISIBLE : View.GONE);
 
-        int red = 0xFFCC0000;
-        int gray = 0xFFF5F5F5;
+        // Define colors
+        int activeBg = 0xFFCC0000; // Solid Red
+        int inactiveBg = 0xFFF5F5F5; // Light Gray
+        int activeText = 0xFFFFFFFF; // White
+        int inactiveText = 0xFFCC0000; // Red text for inactive
 
-        btnTabClasses.setBackgroundTintList(
-                android.content.res.ColorStateList.valueOf(
-                        tab == 0 ? red : gray));
-        btnTabClasses.setTextColor(tab == 0 ? 0xFFFFFFFF : 0xFFCC0000);
+        // Apply highlighting
+        btnTabClasses.setBackgroundTintList(android.content.res.ColorStateList.valueOf(tab == 0 ? activeBg : inactiveBg));
+        btnTabClasses.setTextColor(tab == 0 ? activeText : inactiveText);
 
-        btnTabAttendance.setBackgroundTintList(
-                android.content.res.ColorStateList.valueOf(
-                        tab == 1 ? red : gray));
-        btnTabAttendance.setTextColor(tab == 1 ? 0xFFFFFFFF : 0xFFCC0000);
+        btnTabAttendance.setBackgroundTintList(android.content.res.ColorStateList.valueOf(tab == 1 ? activeBg : inactiveBg));
+        btnTabAttendance.setTextColor(tab == 1 ? activeText : inactiveText);
 
-        btnTabTypeId.setBackgroundTintList(
-                android.content.res.ColorStateList.valueOf(
-                        tab == 2 ? red : gray));
-        btnTabTypeId.setTextColor(tab == 2 ? 0xFFFFFFFF : 0xFFCC0000);
+        btnTabTypeId.setBackgroundTintList(android.content.res.ColorStateList.valueOf(tab == 2 ? activeBg : inactiveBg));
+        btnTabTypeId.setTextColor(tab == 2 ? activeText : inactiveText);
     }
 
     private void setupNavigation() {
-        navHome.setOnClickListener(v -> {
-            Intent intent = new Intent(this, HomeActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(intent);
-        });
-        navAttendance.setOnClickListener(v -> {
-            loadClasses();
-            setupClassSpinner();
-        });
-        navScanner.setOnClickListener(v -> {
-            Intent intent = new Intent(this, ScannerActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(intent);
-        });
-        navReports.setOnClickListener(v -> {
-            Intent intent = new Intent(this, ReportsActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(intent);
-        });
-        navProfile.setOnClickListener(v -> {
-            Intent intent = new Intent(this, ProfileActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(intent);
-        });
+        navHome.setOnClickListener(v -> startActivity(new Intent(this, HomeActivity.class)));
+        navAttendance.setOnClickListener(v -> loadClassesOnline());
+        navScanner.setOnClickListener(v -> startActivity(new Intent(this, ScannerActivity.class)));
+        navReports.setOnClickListener(v -> startActivity(new Intent(this, ReportsActivity.class)));
+        navProfile.setOnClickListener(v -> startActivity(new Intent(this, ProfileActivity.class)));
     }
 }

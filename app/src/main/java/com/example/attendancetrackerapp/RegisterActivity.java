@@ -3,29 +3,28 @@ package com.example.attendancetrackerapp;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.example.attendancetrackerapp.DataBase;
+import okhttp3.ResponseBody;
+import org.json.JSONObject;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class RegisterActivity extends AppCompatActivity {
 
     EditText etName, etEmail, etPassword, etConfirmPassword;
     Button btnRegister;
     TextView tvLogin;
-    DataBase db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_register);
-
-        db = new DataBase(this);
 
         etName = findViewById(R.id.etName);
         etEmail = findViewById(R.id.etEmail);
@@ -61,17 +60,8 @@ public class RegisterActivity extends AppCompatActivity {
                     return;
                 }
 
-                boolean success = db.registerUser(name, email, password);
-                if (success) {
-                    Toast.makeText(RegisterActivity.this,
-                            "Account created! Please sign in.", Toast.LENGTH_SHORT).show();
-                    Intent intent = new Intent(RegisterActivity.this, LoginActivity.class);
-                    startActivity(intent);
-                    finish();
-                } else {
-                    Toast.makeText(RegisterActivity.this,
-                            "Email already exists. Try a different one.", Toast.LENGTH_SHORT).show();
-                }
+                // Call the REST API instead of local DB
+                registerUserOnline(name, email, password);
             }
         });
 
@@ -81,6 +71,43 @@ public class RegisterActivity extends AppCompatActivity {
                 Intent intent = new Intent(RegisterActivity.this, LoginActivity.class);
                 startActivity(intent);
                 finish();
+            }
+        });
+    }
+
+    private void registerUserOnline(String name, String email, String password) {
+        ApiService apiService = ApiService.create();
+        apiService.registerUser(name, email, password).enqueue(new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                try {
+                    if (response.isSuccessful() && response.body() != null) {
+                        String result = response.body().string();
+                        JSONObject json = new JSONObject(result);
+                        String status = json.getString("status");
+                        String message = json.getString("message");
+
+                        if (status.equals("success")) {
+                            Toast.makeText(RegisterActivity.this, message, Toast.LENGTH_SHORT).show();
+                            Intent intent = new Intent(RegisterActivity.this, LoginActivity.class);
+                            startActivity(intent);
+                            finish();
+                        } else {
+                            Toast.makeText(RegisterActivity.this, message, Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        Toast.makeText(RegisterActivity.this, "Server error", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    // Show the actual error message to help debug
+                    Toast.makeText(RegisterActivity.this, "Parse Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ResponseBody> call, Throwable t) {
+                Toast.makeText(RegisterActivity.this, "Network error: " + t.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
     }
