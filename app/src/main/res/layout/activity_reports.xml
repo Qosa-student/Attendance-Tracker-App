@@ -26,7 +26,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Overall student attendance summary"
+            android:text="Select a class to view detailed reports"
             android:textSize="13sp"
             android:textColor="#FFCCCC"/>
 
@@ -43,10 +43,11 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- Overall Reports Section -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Student Attendance Rate"
+                android:text="Overall Attendance Rate"
                 android:textSize="15sp"
                 android:textStyle="bold"
                 android:textColor="#CC0000"
@@ -56,23 +57,47 @@
                 android:id="@+id/llReportList"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"/>
+                android:orientation="vertical"
+                android:layout_marginBottom="24dp"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Flagged Students"
+                android:text="Flagged Students (Overall)"
                 android:textSize="15sp"
                 android:textStyle="bold"
                 android:textColor="#CC0000"
-                android:layout_marginTop="20dp"
                 android:layout_marginBottom="10dp"/>
 
             <LinearLayout
                 android:id="@+id/llFlagged"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"/>
+                android:orientation="vertical"
+                android:layout_marginBottom="24dp"/>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#EEEEEE"
+                android:layout_marginBottom="24dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="View Reports by Class"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:textColor="#CC0000"
+                android:layout_marginBottom="12dp"/>
+
+            <LinearLayout
+                android:id="@+id/llClassList"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <!-- Classes will be listed here -->
+            </LinearLayout>
 
         </LinearLayout>
 

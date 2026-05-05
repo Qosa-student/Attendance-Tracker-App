@@ -106,7 +106,7 @@ public class ManageStudentsActivity extends AppCompatActivity {
     private void findStudentNameGlobally(String studentNumber) {
         android.content.SharedPreferences prefs = getSharedPreferences("user_session", MODE_PRIVATE);
         int userId = prefs.getInt("user_id", -1);
-        
+
         // Search all classes of this teacher to find the name for this ID
         ApiService.create().getClasses(userId).enqueue(new Callback<>() {
             @Override

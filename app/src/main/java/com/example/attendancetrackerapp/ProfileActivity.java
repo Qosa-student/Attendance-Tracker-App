@@ -9,14 +9,13 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.imageview.ShapeableImageView;
 import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -24,7 +23,7 @@ import retrofit2.Response;
 
 public class ProfileActivity extends AppCompatActivity {
 
-    ImageView imgProfilePic;
+    ShapeableImageView imgProfilePic;
     Button btnSaveProfile, btnLogout, btnDeleteAccount, btnChangePic;
     EditText etEditName, etEditPassword;
     TextView tvProfileName, tvProfileRole, tvInfoEmail;
@@ -57,7 +56,10 @@ public class ProfileActivity extends AppCompatActivity {
         userId = prefs.getInt("user_id", -1);
         String name = prefs.getString("name", "Teacher");
         String email = prefs.getString("email", "");
-        String profileUri = prefs.getString("profile_uri", null);
+
+        // Load profile picture from persistent storage based on userId
+        SharedPreferences persistentPrefs = getSharedPreferences("persistent_profile_data", MODE_PRIVATE);
+        String profileUri = persistentPrefs.getString("profile_uri_" + userId, null);
 
         tvProfileName.setText(name);
         tvProfileRole.setText("Teacher");
@@ -65,7 +67,7 @@ public class ProfileActivity extends AppCompatActivity {
         etEditName.setText(name);
 
         btnChangePic = findViewById(R.id.btnChangePic);
-        
+
         if (profileUri != null) {
             try {
                 imgProfilePic.setImageURI(android.net.Uri.parse(profileUri));
@@ -114,16 +116,19 @@ public class ProfileActivity extends AppCompatActivity {
             android.net.Uri selectedImage = data.getData();
             getContentResolver().takePersistableUriPermission(selectedImage, Intent.FLAG_GRANT_READ_URI_PERMISSION);
             imgProfilePic.setImageURI(selectedImage);
-            
-            SharedPreferences.Editor editor = getSharedPreferences("user_session", MODE_PRIVATE).edit();
-            editor.putString("profile_uri", selectedImage.toString());
+
+            // Save to persistent storage linked to user ID
+            SharedPreferences.Editor editor = getSharedPreferences("persistent_profile_data", MODE_PRIVATE).edit();
+            editor.putString("profile_uri_" + userId, selectedImage.toString());
             editor.apply();
-            Toast.makeText(this, "Photo updated locally!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Photo updated!", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void updateProfileOnline(String name, String pass, SharedPreferences prefs) {
-        ApiService.create().updateProfile(userId, name, pass).enqueue(new Callback<ResponseBody>() {
+        SharedPreferences persistentPrefs = getSharedPreferences("persistent_profile_data", MODE_PRIVATE);
+        String profilePic = persistentPrefs.getString("profile_uri_" + userId, "");
+        ApiService.create().updateProfile(userId, name, pass, profilePic).enqueue(new Callback<ResponseBody>() {
             @Override
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                 if (response.isSuccessful()) {
@@ -132,7 +137,12 @@ public class ProfileActivity extends AppCompatActivity {
                     editor.putString("name", name);
                     editor.apply();
                     tvProfileName.setText(name);
-                    imgProfilePic.setImageBitmap(generateAvatar(name));
+
+                    // Only regenerate avatar if no custom image is set
+                    SharedPreferences persistentPrefs = getSharedPreferences("persistent_profile_data", MODE_PRIVATE);
+                    if (persistentPrefs.getString("profile_uri_" + userId, null) == null) {
+                        imgProfilePic.setImageBitmap(generateAvatar(name));
+                    }
                 }
             }
             @Override public void onFailure(Call<ResponseBody> call, Throwable t) {}
@@ -144,6 +154,11 @@ public class ProfileActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                 if (response.isSuccessful()) {
+                    // Permanently clear profile pic on account deletion
+                    SharedPreferences.Editor editor = getSharedPreferences("persistent_profile_data", MODE_PRIVATE).edit();
+                    editor.remove("profile_uri_" + userId);
+                    editor.apply();
+
                     Toast.makeText(ProfileActivity.this, "Account deleted", Toast.LENGTH_SHORT).show();
                     logoutUser();
                 }
@@ -186,7 +201,7 @@ public class ProfileActivity extends AppCompatActivity {
     private void setupNavigation() {
         navHome.setOnClickListener(v -> startActivity(new Intent(this, HomeActivity.class)));
         navAttendance.setOnClickListener(v -> startActivity(new Intent(this, AttendanceActivity.class)));
-        navScanner.setOnClickListener(v -> startActivity(new Intent(this, ScannerActivity.class)));
+        navScanner.setOnClickListener(v -> startActivity(new Intent(this, SeatingActivity.class)));
         navReports.setOnClickListener(v -> startActivity(new Intent(this, ReportsActivity.class)));
         navProfile.setOnClickListener(v -> {});
     }

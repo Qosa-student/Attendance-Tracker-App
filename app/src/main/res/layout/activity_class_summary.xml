@@ -15,29 +15,46 @@
         android:paddingStart="20dp"
         android:paddingEnd="20dp">
 
-        <TextView
-            android:id="@+id/tvWelcome"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Good day, Teacher!"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="#FFFFFF"/>
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/btnBack"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="←"
+                android:textSize="18sp"
+                android:textColor="#FFFFFF"
+                android:background="?attr/selectableItemBackgroundBorderless"/>
+
+            <TextView
+                android:id="@+id/tvClassTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Class Summary"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:layout_marginStart="8dp"/>
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tvDate"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Today's Date"
+            android:text="Overall Performance"
             android:textSize="13sp"
-            android:textColor="#FFCCCC"/>
+            android:textColor="#FFCCCC"
+            android:layout_marginStart="48dp"/>
 
     </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
         android:padding="16dp">
 
         <LinearLayout
@@ -45,11 +62,10 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- Overall Summary Section -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Today's Overall Summary"
+                android:text="Class Overview"
                 android:textSize="15sp"
                 android:textStyle="bold"
                 android:textColor="#CC0000"
@@ -166,93 +182,19 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="My Classes"
+                android:text="Students in this class"
                 android:textSize="15sp"
                 android:textStyle="bold"
                 android:textColor="#CC0000"
-                android:layout_marginBottom="12dp"/>
+                android:layout_marginBottom="10dp"/>
 
             <LinearLayout
-                android:id="@+id/llClassList"
+                android:id="@+id/llStudentAttendanceList"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"/>
 
         </LinearLayout>
-
     </ScrollView>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:background="#FFFFFF"
-        android:elevation="8dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="48dp"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp">
-
-        <LinearLayout
-            android:id="@+id/navHome"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="4dp">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="⌂" android:textSize="20sp" android:textColor="#CC0000"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Home" android:textSize="10sp" android:textColor="#CC0000" android:textStyle="bold"/>
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/navAttendance"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="4dp">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="☑" android:textSize="20sp" android:textColor="#555555"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Attendance" android:textSize="10sp" android:textColor="#555555"/>
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/navScanner"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="4dp">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="⊡" android:textSize="20sp" android:textColor="#555555"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Seating" android:textSize="10sp" android:textColor="#555555"/>
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/navReports"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="4dp">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="≡" android:textSize="20sp" android:textColor="#555555"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Reports" android:textSize="10sp" android:textColor="#555555"/>
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/navProfile"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center"
-            android:padding="4dp">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="◉" android:textSize="20sp" android:textColor="#555555"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Profile" android:textSize="10sp" android:textColor="#555555"/>
-        </LinearLayout>
-
-    </LinearLayout>
 
 </LinearLayout>

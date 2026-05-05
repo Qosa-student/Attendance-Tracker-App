@@ -13,8 +13,9 @@ import retrofit2.http.Query;
 
 public interface ApiService {
 
-    // IMPORTANT: Must start with http:// and end with /
+    // Update this with your actual URL
     String BASE_URL = "http://attendance-tracker.infinityfreeapp.com/attendance_api/";
+
     @FormUrlEncoded
     @POST("register.php")
     Call<ResponseBody> registerUser(
@@ -33,16 +34,20 @@ public interface ApiService {
     @GET("manage_classes.php?action=get")
     Call<List<ClassModel>> getClasses(@Query("teacher_id") int teacherId);
 
+    // ── Updated: added schedule field ────────────────────────────────────────
     @FormUrlEncoded
     @POST("manage_classes.php?action=add")
     Call<ResponseBody> addClass(
             @Field("subject_name") String subjectName,
             @Field("section") String section,
+            @Field("schedule") String schedule,       // ← NEW
             @Field("teacher_id") int teacherId
     );
 
     @GET("manage_students.php?action=get")
-    Call<List<StudentModel>> getStudents(@Query("class_id") int classId);
+    Call<List<StudentModel>> getStudents(
+            @Query("class_id") int classId
+    );
 
     @FormUrlEncoded
     @POST("manage_students.php?action=add")
@@ -61,14 +66,29 @@ public interface ApiService {
             @Field("teacher_id") int teacherId,
             @Field("teacher_name") String teacherName,
             @Field("date") String date,
-            @Field("status") String status
+            @Field("status") String status,
+            @Field("class_id") int classId
+    );
+
+    // ── NEW: fetch today's attendance for a class (used by SeatingActivity) ──
+    @GET("get_today_attendance.php")
+    Call<List<AttendanceRecord>> getTodayAttendance(
+            @Query("class_id") int classId,
+            @Query("date") String date
     );
 
     @GET("get_summary.php")
-    Call<SummaryModel> getSummary(@Query("teacher_id") int teacherId, @Query("date") String date);
+    Call<SummaryModel> getSummary(
+            @Query("teacher_id") int teacherId,
+            @Query("date") String date,
+            @Query("class_id") Integer classId
+    );
 
     @GET("get_reports.php")
-    Call<List<ReportModel>> getReports(@Query("teacher_id") int teacherId);
+    Call<List<ReportModel>> getReports(
+            @Query("teacher_id") int teacherId,
+            @Query("class_id") Integer classId
+    );
 
     @FormUrlEncoded
     @POST("delete_account.php")
@@ -87,7 +107,14 @@ public interface ApiService {
     Call<ResponseBody> updateProfile(
             @Field("user_id") int userId,
             @Field("name") String name,
-            @Field("password") String password
+            @Field("password") String password,
+            @Field("profile_pic") String profilePic
+    );
+
+    @GET("search_students.php")
+    Call<List<SearchResultModel>> searchStudents(
+            @Query("teacher_id") int teacherId,
+            @Query("query") String query
     );
 
     static ApiService create() {
@@ -109,17 +136,27 @@ public interface ApiService {
         return retrofit.create(ApiService.class);
     }
 
-    // Models for JSON mapping
+    // ── Updated: added schedule field ────────────────────────────────────────
     class ClassModel {
         int id;
         String subject_name;
         String section;
+        String schedule;   // ← NEW  e.g. "Mon/Wed 8:00-10:00 AM"
+        int teacher_id;
     }
 
     class StudentModel {
         int id;
         String name;
         String student_number;
+        String status; // For seating colors
+    }
+
+    // ── NEW: maps one row from get_today_attendance.php ───────────────────────
+    class AttendanceRecord {
+        int student_id;
+        String status;   // "Present" | "Absent" | "Late"
+        String date;
     }
 
     class SummaryModel {
@@ -138,7 +175,20 @@ public interface ApiService {
     class ReportModel {
         String name;
         String student_number;
+        @com.google.gson.annotations.SerializedName(value="present_count", alternate={"present"})
         int present_count;
+        @com.google.gson.annotations.SerializedName(value="absent_count", alternate={"absent"})
+        int absent_count;
+        @com.google.gson.annotations.SerializedName(value="late_count", alternate={"late"})
+        int late_count;
         int total_count;
+    }
+
+    class SearchResultModel {
+        int id;
+        String name;
+        String student_number;
+        String subject_name;
+        String section;
     }
 }

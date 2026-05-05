@@ -34,8 +34,7 @@ public class AttendanceActivity extends AppCompatActivity {
     Button btnTabClasses, btnTabAttendance, btnTabTypeId;
     Button btnAddClass, btnSaveAttendance;
     Button btnMarkPresent, btnMarkAbsent, btnMarkLate;
-    EditText etSubjectName, etSection, etSearch, etStudentId;
-    TextView tvAttendanceDate, tvFoundName, tvFoundId;
+    EditText etSubjectName, etSection, etSearch, etStudentId, etSchedule; // Added etSchedule    TextView tvAttendanceDate, tvFoundName, tvFoundId;
     Spinner spinnerClass;
     int userId;
     int selectedClassId = -1;
@@ -99,23 +98,30 @@ public class AttendanceActivity extends AppCompatActivity {
         btnAddClass.setOnClickListener(v -> {
             String subject = etSubjectName.getText().toString().trim();
             String section = etSection.getText().toString().trim();
-            if (subject.isEmpty() || section.isEmpty()) {
-                Toast.makeText(this, "Fill in subject and section", Toast.LENGTH_SHORT).show();
+            String schedule = etSchedule.getText().toString().trim(); // Capture the new field
+
+            if (subject.isEmpty() || section.isEmpty() || schedule.isEmpty()) {
+                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show();
                 return;
             }
-            ApiService.create().addClass(subject, section, userId).enqueue(new Callback<>() {
+
+            // Now the call has 4 parameters, matching your ApiService!
+            ApiService.create().addClass(subject, section, schedule, userId).enqueue(new Callback<>() {
                 @Override
                 public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                     if (response.isSuccessful()) {
-                        Toast.makeText(AttendanceActivity.this, "Class added!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(AttendanceActivity.this, "Class added successfully!", Toast.LENGTH_SHORT).show();
+                        // Clear the fields
                         etSubjectName.setText("");
                         etSection.setText("");
+                        etSchedule.setText("");
                         loadClassesOnline();
                     }
                 }
+
                 @Override
                 public void onFailure(Call<ResponseBody> call, Throwable t) {
-                    Toast.makeText(AttendanceActivity.this, "Failed to add class", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(AttendanceActivity.this, "Network Error", Toast.LENGTH_SHORT).show();
                 }
             });
         });
@@ -292,7 +298,7 @@ public class AttendanceActivity extends AppCompatActivity {
             tvInfo.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1f));
 
             LinearLayout buttons = new LinearLayout(this);
-            String[] statuses = {"present", "absent", "late"};
+            String[] statuses = {"Present", "Absent", "Late"};
             int[] colors = {0xFF16A34A, 0xFFCC0000, 0xFFD97706};
             String[] labels = {"P", "A", "L"};
 
@@ -302,9 +308,9 @@ public class AttendanceActivity extends AppCompatActivity {
                 btn.setText(labels[i]);
                 btn.setLayoutParams(new LinearLayout.LayoutParams(100, 100));
                 btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(colors[i]));
-                btn.setAlpha(attendanceMap.containsKey(sm.id) && status.equals(attendanceMap.get(sm.id)) ? 1f : 0.4f);
+                btn.setAlpha(attendanceMap.containsKey(sm.id) && status.equalsIgnoreCase(attendanceMap.get(sm.id)) ? 1f : 0.4f);
                 btn.setOnClickListener(v -> {
-                    if (attendanceMap.containsKey(sm.id) && status.equals(attendanceMap.get(sm.id))) {
+                    if (attendanceMap.containsKey(sm.id) && status.equalsIgnoreCase(attendanceMap.get(sm.id))) {
                         attendanceMap.remove(sm.id);
                     } else {
                         attendanceMap.put(sm.id, status);
@@ -326,7 +332,7 @@ public class AttendanceActivity extends AppCompatActivity {
 
         attendanceMap.forEach((studentId, status) -> {
             ApiService.create().markAttendance(studentId, studentNamesCache.get(studentId), 
-                className, userId, tName, today, status).enqueue(new Callback<>() {
+                className, userId, tName, today, status, selectedClassId).enqueue(new Callback<>() {
                     @Override public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {}
                     @Override public void onFailure(Call<ResponseBody> call, Throwable t) {}
                 });
@@ -345,9 +351,9 @@ public class AttendanceActivity extends AppCompatActivity {
             @Override public void afterTextChanged(Editable s) {}
         });
 
-        btnMarkPresent.setOnClickListener(v -> markTypedAttendance("present"));
-        btnMarkAbsent.setOnClickListener(v -> markTypedAttendance("absent"));
-        btnMarkLate.setOnClickListener(v -> markTypedAttendance("late"));
+        btnMarkPresent.setOnClickListener(v -> markTypedAttendance("Present"));
+        btnMarkAbsent.setOnClickListener(v -> markTypedAttendance("Absent"));
+        btnMarkLate.setOnClickListener(v -> markTypedAttendance("Late"));
     }
 
     private void searchStudentOnline(String query) {
@@ -382,7 +388,7 @@ public class AttendanceActivity extends AppCompatActivity {
                                         
                                         if (sm.name.toLowerCase().contains(query.toLowerCase()) || sm.student_number.contains(query)) {
                                             seenIds.add(sm.student_number);
-                                            addSearchResult(sm, cm.subject_name);
+                                            addSearchResult(sm, cm.subject_name, cm.id);
                                         }
                                     }
                                 }
@@ -396,7 +402,9 @@ public class AttendanceActivity extends AppCompatActivity {
         });
     }
 
-    private void addSearchResult(ApiService.StudentModel sm, String className) {
+    int typedClassId = -1;
+
+    private void addSearchResult(ApiService.StudentModel sm, String className, int classId) {
         TextView tv = new TextView(this);
         tv.setText(sm.name + " (" + sm.student_number + ") - " + className);
         tv.setPadding(16, 16, 16, 16);
@@ -406,6 +414,7 @@ public class AttendanceActivity extends AppCompatActivity {
         tv.setLayoutParams(lp);
         tv.setOnClickListener(v -> {
             typedStudent = sm;
+            typedClassId = classId;
             llStudentFound.setVisibility(View.VISIBLE);
             tvFoundName.setText(sm.name);
             tvFoundId.setText(sm.student_number + " | " + className);
@@ -428,13 +437,14 @@ public class AttendanceActivity extends AppCompatActivity {
         String info = tvFoundId.getText().toString();
         String className = info.contains("|") ? info.split("\\|")[1].trim() : "General";
 
-        ApiService.create().markAttendance(typedStudent.id, typedStudent.name, className, userId, tName, today, status).enqueue(new Callback<>() {
+        ApiService.create().markAttendance(typedStudent.id, typedStudent.name, className, userId, tName, today, status, typedClassId).enqueue(new Callback<>() {
             @Override
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                 if (response.isSuccessful()) {
                     Toast.makeText(AttendanceActivity.this, "Marked " + typedStudent.name + " as " + status, Toast.LENGTH_SHORT).show();
                     updateMarkedList(typedStudent.name, status);
                     typedStudent = null;
+                    typedClassId = -1;
                     llStudentFound.setVisibility(View.GONE);
                     etStudentId.setText("");
                 }
@@ -481,7 +491,7 @@ public class AttendanceActivity extends AppCompatActivity {
     private void setupNavigation() {
         navHome.setOnClickListener(v -> startActivity(new Intent(this, HomeActivity.class)));
         navAttendance.setOnClickListener(v -> loadClassesOnline());
-        navScanner.setOnClickListener(v -> startActivity(new Intent(this, ScannerActivity.class)));
+        navScanner.setOnClickListener(v -> startActivity(new Intent(this, SeatingActivity.class)));
         navReports.setOnClickListener(v -> startActivity(new Intent(this, ReportsActivity.class)));
         navProfile.setOnClickListener(v -> startActivity(new Intent(this, ProfileActivity.class)));
     }

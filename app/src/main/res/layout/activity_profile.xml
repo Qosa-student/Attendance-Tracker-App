@@ -16,12 +16,14 @@
         android:paddingEnd="20dp"
         android:gravity="center">
 
-        <ImageView
+        <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/imgProfilePic"
             android:layout_width="80dp"
             android:layout_height="80dp"
             android:scaleType="centerCrop"
-            android:layout_marginBottom="8dp"/>
+            android:layout_marginBottom="8dp"
+            app:shapeAppearanceOverlay="@style/CircleImage"
+            xmlns:app="http://schemas.android.com/apk/res-auto"/>
 
         <Button
             android:id="@+id/btnChangePic"
