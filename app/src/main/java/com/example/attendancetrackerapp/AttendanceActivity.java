@@ -34,7 +34,8 @@ public class AttendanceActivity extends AppCompatActivity {
     Button btnTabClasses, btnTabAttendance, btnTabTypeId;
     Button btnAddClass, btnSaveAttendance;
     Button btnMarkPresent, btnMarkAbsent, btnMarkLate;
-    EditText etSubjectName, etSection, etSearch, etStudentId, etSchedule; // Added etSchedule    TextView tvAttendanceDate, tvFoundName, tvFoundId;
+    EditText etSubjectName, etSection, etSearch, etStudentId;
+    TextView tvAttendanceDate, tvFoundName, tvFoundId;
     Spinner spinnerClass;
     int userId;
     int selectedClassId = -1;
@@ -98,30 +99,23 @@ public class AttendanceActivity extends AppCompatActivity {
         btnAddClass.setOnClickListener(v -> {
             String subject = etSubjectName.getText().toString().trim();
             String section = etSection.getText().toString().trim();
-            String schedule = etSchedule.getText().toString().trim(); // Capture the new field
-
-            if (subject.isEmpty() || section.isEmpty() || schedule.isEmpty()) {
-                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show();
+            if (subject.isEmpty() || section.isEmpty()) {
+                Toast.makeText(this, "Fill in subject and section", Toast.LENGTH_SHORT).show();
                 return;
             }
-
-            // Now the call has 4 parameters, matching your ApiService!
-            ApiService.create().addClass(subject, section, schedule, userId).enqueue(new Callback<>() {
+            ApiService.create().addClass(subject, section, userId).enqueue(new Callback<>() {
                 @Override
                 public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                     if (response.isSuccessful()) {
-                        Toast.makeText(AttendanceActivity.this, "Class added successfully!", Toast.LENGTH_SHORT).show();
-                        // Clear the fields
+                        Toast.makeText(AttendanceActivity.this, "Class added!", Toast.LENGTH_SHORT).show();
                         etSubjectName.setText("");
                         etSection.setText("");
-                        etSchedule.setText("");
                         loadClassesOnline();
                     }
                 }
-
                 @Override
                 public void onFailure(Call<ResponseBody> call, Throwable t) {
-                    Toast.makeText(AttendanceActivity.this, "Network Error", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(AttendanceActivity.this, "Failed to add class", Toast.LENGTH_SHORT).show();
                 }
             });
         });
