@@ -25,11 +25,12 @@ import retrofit2.Response;
 public class ProfileActivity extends AppCompatActivity {
 
     ImageView imgProfilePic;
-    Button btnSaveProfile, btnLogout, btnDeleteAccount;
+    Button btnSaveProfile, btnLogout, btnDeleteAccount, btnChangePic;
     EditText etEditName, etEditPassword;
     TextView tvProfileName, tvProfileRole, tvInfoEmail;
     LinearLayout navHome, navAttendance, navScanner, navReports, navProfile;
     int userId;
+    private static final int PICK_IMAGE = 1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,13 +57,31 @@ public class ProfileActivity extends AppCompatActivity {
         userId = prefs.getInt("user_id", -1);
         String name = prefs.getString("name", "Teacher");
         String email = prefs.getString("email", "");
+        String profileUri = prefs.getString("profile_uri", null);
 
         tvProfileName.setText(name);
         tvProfileRole.setText("Teacher");
         tvInfoEmail.setText(email);
         etEditName.setText(name);
+
+        btnChangePic = findViewById(R.id.btnChangePic);
         
-        imgProfilePic.setImageBitmap(generateAvatar(name));
+        if (profileUri != null) {
+            try {
+                imgProfilePic.setImageURI(android.net.Uri.parse(profileUri));
+            } catch (Exception e) {
+                imgProfilePic.setImageBitmap(generateAvatar(name));
+            }
+        } else {
+            imgProfilePic.setImageBitmap(generateAvatar(name));
+        }
+
+        btnChangePic.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("image/*");
+            startActivityForResult(intent, PICK_IMAGE);
+        });
 
         btnSaveProfile.setOnClickListener(v -> {
             String newName = etEditName.getText().toString().trim();
@@ -86,6 +105,21 @@ public class ProfileActivity extends AppCompatActivity {
         });
 
         setupNavigation();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PICK_IMAGE && resultCode == RESULT_OK && data != null) {
+            android.net.Uri selectedImage = data.getData();
+            getContentResolver().takePersistableUriPermission(selectedImage, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            imgProfilePic.setImageURI(selectedImage);
+            
+            SharedPreferences.Editor editor = getSharedPreferences("user_session", MODE_PRIVATE).edit();
+            editor.putString("profile_uri", selectedImage.toString());
+            editor.apply();
+            Toast.makeText(this, "Photo updated locally!", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void updateProfileOnline(String name, String pass, SharedPreferences prefs) {

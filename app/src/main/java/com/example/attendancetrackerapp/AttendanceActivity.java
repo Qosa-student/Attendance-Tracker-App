@@ -29,16 +29,18 @@ import retrofit2.Response;
 public class AttendanceActivity extends AppCompatActivity {
 
     LinearLayout layoutClasses, layoutManual, layoutTypeId;
-    LinearLayout llClassList, llStudentList;
+    LinearLayout llClassList, llStudentList, llSearchResults, llStudentFound, llMarkedList;
     LinearLayout navHome, navAttendance, navScanner, navReports, navProfile;
     Button btnTabClasses, btnTabAttendance, btnTabTypeId;
     Button btnAddClass, btnSaveAttendance;
     Button btnMarkPresent, btnMarkAbsent, btnMarkLate;
     EditText etSubjectName, etSection, etSearch, etStudentId;
-    TextView tvAttendanceDate;
+    TextView tvAttendanceDate, tvFoundName, tvFoundId;
     Spinner spinnerClass;
     int userId;
     int selectedClassId = -1;
+    ApiService.StudentModel typedStudent = null;
+    private long searchRequestId = 0;
     String today;
     HashMap<Integer, String> attendanceMap = new HashMap<>();
     HashMap<Integer, String> studentNamesCache = new HashMap<>();
@@ -63,6 +65,12 @@ public class AttendanceActivity extends AppCompatActivity {
         layoutTypeId = findViewById(R.id.layoutTypeId);
         llClassList = findViewById(R.id.llClassList);
         llStudentList = findViewById(R.id.llStudentList);
+        llSearchResults = findViewById(R.id.llSearchResults);
+        llStudentFound = findViewById(R.id.llStudentFound);
+        llMarkedList = findViewById(R.id.llMarkedList);
+
+        tvFoundName = findViewById(R.id.tvFoundName);
+        tvFoundId = findViewById(R.id.tvFoundId);
         btnTabClasses = findViewById(R.id.btnTabClasses);
         btnTabAttendance = findViewById(R.id.btnTabAttendance);
         btnTabTypeId = findViewById(R.id.btnTabTypeId);
@@ -296,7 +304,11 @@ public class AttendanceActivity extends AppCompatActivity {
                 btn.setBackgroundTintList(android.content.res.ColorStateList.valueOf(colors[i]));
                 btn.setAlpha(attendanceMap.containsKey(sm.id) && status.equals(attendanceMap.get(sm.id)) ? 1f : 0.4f);
                 btn.setOnClickListener(v -> {
-                    attendanceMap.put(sm.id, status);
+                    if (attendanceMap.containsKey(sm.id) && status.equals(attendanceMap.get(sm.id))) {
+                        attendanceMap.remove(sm.id);
+                    } else {
+                        attendanceMap.put(sm.id, status);
+                    }
                     renderStudentList(etSearch.getText().toString());
                 });
                 buttons.addView(btn);
@@ -327,11 +339,115 @@ public class AttendanceActivity extends AppCompatActivity {
     private void setupTypeId() {
         etStudentId.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
+                searchStudentOnline(s.toString().trim());
+            }
             @Override public void afterTextChanged(Editable s) {}
         });
 
-        btnMarkPresent.setOnClickListener(v -> Toast.makeText(this, "Please use seating or manual list", Toast.LENGTH_SHORT).show());
+        btnMarkPresent.setOnClickListener(v -> markTypedAttendance("present"));
+        btnMarkAbsent.setOnClickListener(v -> markTypedAttendance("absent"));
+        btnMarkLate.setOnClickListener(v -> markTypedAttendance("late"));
+    }
+
+    private void searchStudentOnline(String query) {
+        if (query.length() < 2) {
+            llSearchResults.setVisibility(View.GONE);
+            return;
+        }
+
+        final long currentId = ++searchRequestId;
+        llSearchResults.removeAllViews();
+        llSearchResults.setVisibility(View.VISIBLE);
+        
+        java.util.Set<String> seenIds = new java.util.HashSet<>();
+
+        // We search through all classes of this teacher
+        ApiService.create().getClasses(userId).enqueue(new Callback<>() {
+            @Override
+            public void onResponse(Call<List<ApiService.ClassModel>> call, Response<List<ApiService.ClassModel>> response) {
+                if (currentId != searchRequestId) return;
+                
+                if (response.isSuccessful() && response.body() != null) {
+                    for (ApiService.ClassModel cm : response.body()) {
+                        ApiService.create().getStudents(cm.id).enqueue(new Callback<>() {
+                            @Override
+                            public void onResponse(Call<List<ApiService.StudentModel>> call, Response<List<ApiService.StudentModel>> sRes) {
+                                if (currentId != searchRequestId) return;
+                                
+                                if (sRes.isSuccessful() && sRes.body() != null) {
+                                    for (ApiService.StudentModel sm : sRes.body()) {
+                                        // Deduplicate by student number to avoid repeating same student
+                                        if (seenIds.contains(sm.student_number)) continue;
+                                        
+                                        if (sm.name.toLowerCase().contains(query.toLowerCase()) || sm.student_number.contains(query)) {
+                                            seenIds.add(sm.student_number);
+                                            addSearchResult(sm, cm.subject_name);
+                                        }
+                                    }
+                                }
+                            }
+                            @Override public void onFailure(Call<List<ApiService.StudentModel>> call, Throwable t) {}
+                        });
+                    }
+                }
+            }
+            @Override public void onFailure(Call<List<ApiService.ClassModel>> call, Throwable t) {}
+        });
+    }
+
+    private void addSearchResult(ApiService.StudentModel sm, String className) {
+        TextView tv = new TextView(this);
+        tv.setText(sm.name + " (" + sm.student_number + ") - " + className);
+        tv.setPadding(16, 16, 16, 16);
+        tv.setBackgroundColor(0xFFF5F5F5);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 0, 0, 4);
+        tv.setLayoutParams(lp);
+        tv.setOnClickListener(v -> {
+            typedStudent = sm;
+            llStudentFound.setVisibility(View.VISIBLE);
+            tvFoundName.setText(sm.name);
+            tvFoundId.setText(sm.student_number + " | " + className);
+            llSearchResults.setVisibility(View.GONE);
+            etStudentId.setText(sm.name);
+        });
+        llSearchResults.addView(tv);
+    }
+
+    private void markTypedAttendance(String status) {
+        if (typedStudent == null) {
+            Toast.makeText(this, "Search and select a student first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        SharedPreferences prefs = getSharedPreferences("user_session", MODE_PRIVATE);
+        String tName = prefs.getString("name", "Teacher");
+        
+        // Find class name from the selected text or just use a placeholder
+        String info = tvFoundId.getText().toString();
+        String className = info.contains("|") ? info.split("\\|")[1].trim() : "General";
+
+        ApiService.create().markAttendance(typedStudent.id, typedStudent.name, className, userId, tName, today, status).enqueue(new Callback<>() {
+            @Override
+            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                if (response.isSuccessful()) {
+                    Toast.makeText(AttendanceActivity.this, "Marked " + typedStudent.name + " as " + status, Toast.LENGTH_SHORT).show();
+                    updateMarkedList(typedStudent.name, status);
+                    typedStudent = null;
+                    llStudentFound.setVisibility(View.GONE);
+                    etStudentId.setText("");
+                }
+            }
+            @Override public void onFailure(Call<ResponseBody> call, Throwable t) {}
+        });
+    }
+
+    private void updateMarkedList(String name, String status) {
+        TextView tv = new TextView(this);
+        tv.setText(name + " - " + status.toUpperCase());
+        tv.setPadding(0, 8, 0, 8);
+        llMarkedList.addView(tv, 0);
     }
 
     private void setupTabs() {

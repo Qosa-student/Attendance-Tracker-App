@@ -40,7 +40,7 @@ public class ScannerActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_scanner);
+        setContentView(R.layout.activity_seating);
 
         android.content.SharedPreferences prefs = getSharedPreferences(
                 "user_session", MODE_PRIVATE);

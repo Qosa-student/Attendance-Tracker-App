@@ -39,6 +39,7 @@ public class ManageStudentsActivity extends AppCompatActivity {
         tvTitle.setText(className);
 
         loadStudentsOnline();
+        setupStudentNumberLookup();
 
         btnAddStudent.setOnClickListener(v -> {
             String number = etStudentNumber.getText().toString().trim();
@@ -55,21 +56,29 @@ public class ManageStudentsActivity extends AppCompatActivity {
                     try {
                         if (response.isSuccessful() && response.body() != null) {
                             String result = response.body().string();
-                            org.json.JSONObject json = new org.json.JSONObject(result);
-                            String status = json.getString("status");
-                            String message = json.getString("message");
+                            try {
+                                org.json.JSONObject json = new org.json.JSONObject(result);
+                                String status = json.getString("status");
+                                String message = json.getString("message");
 
-                            if (status.equals("success")) {
-                                Toast.makeText(ManageStudentsActivity.this, message, Toast.LENGTH_SHORT).show();
-                                etStudentNumber.setText("");
-                                etStudentName.setText("");
-                                loadStudentsOnline();
-                            } else {
-                                Toast.makeText(ManageStudentsActivity.this, message, Toast.LENGTH_LONG).show();
+                                if (status.equals("success")) {
+                                    Toast.makeText(ManageStudentsActivity.this, message, Toast.LENGTH_SHORT).show();
+                                    etStudentNumber.setText("");
+                                    etStudentName.setText("");
+                                    loadStudentsOnline();
+                                } else {
+                                    Toast.makeText(ManageStudentsActivity.this, message, Toast.LENGTH_LONG).show();
+                                }
+                            } catch (org.json.JSONException e) {
+                                // If parsing fails, show the raw result to help debug (e.g. PHP errors)
+                                Toast.makeText(ManageStudentsActivity.this, "Error: " + result, Toast.LENGTH_LONG).show();
                             }
+                        } else {
+                            Toast.makeText(ManageStudentsActivity.this, "Server error: " + response.code(), Toast.LENGTH_SHORT).show();
                         }
                     } catch (Exception e) {
                         e.printStackTrace();
+                        Toast.makeText(ManageStudentsActivity.this, "Parsing error", Toast.LENGTH_SHORT).show();
                     }
                 }
                 @Override
@@ -77,6 +86,54 @@ public class ManageStudentsActivity extends AppCompatActivity {
                     Toast.makeText(ManageStudentsActivity.this, "Network error", Toast.LENGTH_SHORT).show();
                 }
             });
+        });
+    }
+
+    private void setupStudentNumberLookup() {
+        etStudentNumber.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(android.text.Editable s) {
+                String number = s.toString().trim();
+                // If it looks like a full ID (e.g. 2024-0001), try to find the name
+                if (number.length() >= 5) {
+                    findStudentNameGlobally(number);
+                }
+            }
+        });
+    }
+
+    private void findStudentNameGlobally(String studentNumber) {
+        android.content.SharedPreferences prefs = getSharedPreferences("user_session", MODE_PRIVATE);
+        int userId = prefs.getInt("user_id", -1);
+        
+        // Search all classes of this teacher to find the name for this ID
+        ApiService.create().getClasses(userId).enqueue(new Callback<>() {
+            @Override
+            public void onResponse(Call<List<ApiService.ClassModel>> call, Response<List<ApiService.ClassModel>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    for (ApiService.ClassModel cm : response.body()) {
+                        ApiService.create().getStudents(cm.id).enqueue(new Callback<>() {
+                            @Override
+                            public void onResponse(Call<List<ApiService.StudentModel>> call, Response<List<ApiService.StudentModel>> sRes) {
+                                if (sRes.isSuccessful() && sRes.body() != null) {
+                                    for (ApiService.StudentModel sm : sRes.body()) {
+                                        if (sm.student_number.equals(studentNumber)) {
+                                            // If the name field is empty, auto-fill it!
+                                            if (etStudentName.getText().toString().trim().isEmpty()) {
+                                                etStudentName.setText(sm.name);
+                                            }
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                            @Override public void onFailure(Call<List<ApiService.StudentModel>> call, Throwable t) {}
+                        });
+                    }
+                }
+            }
+            @Override public void onFailure(Call<List<ApiService.ClassModel>> call, Throwable t) {}
         });
     }
 

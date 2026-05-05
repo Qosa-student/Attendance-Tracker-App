@@ -94,7 +94,6 @@ public interface ApiService {
         okhttp3.OkHttpClient client = new okhttp3.OkHttpClient.Builder()
                 .addInterceptor(chain -> {
                     okhttp3.Request request = chain.request().newBuilder()
-                            // The "Googlebot" trick to bypass InfinityFree security
                             .header("User-Agent", "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)")
                             .header("Accept", "application/json")
                             .build();
