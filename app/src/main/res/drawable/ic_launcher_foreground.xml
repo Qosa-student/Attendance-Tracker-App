@@ -1,0 +1,77 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Clipboard -->
+    <path
+        android:fillColor="#E3F2FD"
+        android:pathData="M38,25 h50 a4,4 0 0 1 4,4 v60 a4,4 0 0 1 -4,4 h-50 a4,4 0 0 1 -4,-4 v-60 a4,4 0 0 1 4,-4 z"
+        android:strokeColor="#263238"
+        android:strokeWidth="2"/>
+
+    <!-- Top Clip -->
+    <path
+        android:fillColor="#455A64"
+        android:pathData="M50,22 h26 v8 h-26 z"
+        android:strokeColor="#263238"
+        android:strokeWidth="1"/>
+
+    <!-- Clipboard Lines -->
+    <path
+        android:strokeColor="#B0BEC5"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M65,45 h15 M65,55 h15 M65,65 h15 M45,75 h35 M45,85 h35"/>
+
+    <!-- Status Circle (Green) -->
+    <path
+        android:fillColor="#4CAF50"
+        android:pathData="M52,48 m-10,0 a10,10 0 1 1 20,0 a10,10 0 1 1 -20,0"
+        android:strokeColor="#263238"
+        android:strokeWidth="1.5"/>
+
+    <!-- Checkmark inside Green Circle -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round"
+        android:pathData="M47,48 l3,3 l7,-7"/>
+
+    <!-- Person -->
+    <!-- Shirt -->
+    <path
+        android:fillColor="#448AFF"
+        android:pathData="M15,95 v-10 a10,10 0 0 1 10,-10 h20 a10,10 0 0 1 10,10 v10 z"
+        android:strokeColor="#263238"
+        android:strokeWidth="2"/>
+
+    <!-- Neck -->
+    <path
+        android:fillColor="#FFD180"
+        android:pathData="M30,75 h10 v5 h-10 z"
+        android:strokeColor="#263238"
+        android:strokeWidth="1"/>
+
+    <!-- Face -->
+    <path
+        android:fillColor="#FFD180"
+        android:pathData="M22,48 a13,13 0 0 1 26,0 v15 a13,13 0 0 1 -26,0 z"
+        android:strokeColor="#263238"
+        android:strokeWidth="2"/>
+
+    <!-- Hair -->
+    <path
+        android:fillColor="#37474F"
+        android:pathData="M22,48 a13,13 0 0 1 26,0 v-5 c0,-7 -6,-13 -13,-13 s-13,6 -13,13 z"
+        android:strokeColor="#263238"
+        android:strokeWidth="1.5"/>
+
+    <!-- Hair fringe/detail -->
+    <path
+        android:fillColor="#37474F"
+        android:pathData="M22,48 l10,-5 l8,3 l8,-2 v-4 c0,-5 -4,-10 -10,-10 s-16,5 -16,18 z"/>
+
+</vector>

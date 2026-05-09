@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="llTodayList" type="id" />
+    <item name="llMonthlyList" type="id" />
+    <item name="llHighlights" type="id" />
+    <item name="llScheduleList" type="id" />
+    <item name="layoutToday" type="id" />
+    <item name="layoutMonthly" type="id" />
+    <item name="layoutSchedules" type="id" />
+    <item name="btnTabToday" type="id" />
+    <item name="btnTabMonthly" type="id" />
+    <item name="btnTabSchedules" type="id" />
+</resources>
