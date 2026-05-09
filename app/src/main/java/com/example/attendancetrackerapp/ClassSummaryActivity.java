@@ -8,7 +8,6 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import retrofit2.Call;
@@ -18,9 +17,11 @@ import retrofit2.Response;
 public class ClassSummaryActivity extends AppCompatActivity {
 
     TextView tvClassTitle, tvDate, tvPresentCount, tvAbsentCount, tvLateCount, tvRateCount;
-    LinearLayout llStudentAttendanceList;
+    LinearLayout llStudentAttendanceList, llDatePicker;
     int userId, classId;
     String className;
+    String selectedDateDb;
+    java.util.Calendar calendar = java.util.Calendar.getInstance();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,10 +34,9 @@ public class ClassSummaryActivity extends AppCompatActivity {
         SharedPreferences prefs = getSharedPreferences("user_session", MODE_PRIVATE);
         userId = prefs.getInt("user_id", -1);
 
-        String todayDisplay = new SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(new Date());
-
         tvClassTitle = findViewById(R.id.tvClassTitle);
         tvDate = findViewById(R.id.tvDate);
+        llDatePicker = findViewById(R.id.llDatePicker);
         tvPresentCount = findViewById(R.id.tvPresentCount);
         tvAbsentCount = findViewById(R.id.tvAbsentCount);
         tvLateCount = findViewById(R.id.tvLateCount);
@@ -44,11 +44,120 @@ public class ClassSummaryActivity extends AppCompatActivity {
         llStudentAttendanceList = findViewById(R.id.llStudentAttendanceList);
 
         tvClassTitle.setText(className);
-        tvDate.setText(todayDisplay);
+        updateDateDisplay();
 
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
+        llDatePicker.setOnClickListener(v -> showDatePicker());
 
         loadOverallClassData();
+    }
+
+    private void updateDateDisplay() {
+        tvDate.setText(new SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(calendar.getTime()));
+        selectedDateDb = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.getTime());
+    }
+
+    private void showDatePicker() {
+        new android.app.DatePickerDialog(this, (view, year, month, dayOfMonth) -> {
+            calendar.set(year, month, dayOfMonth);
+            updateDateDisplay();
+            loadDailyData();
+        }, calendar.get(java.util.Calendar.YEAR), calendar.get(java.util.Calendar.MONTH), calendar.get(java.util.Calendar.DAY_OF_MONTH)).show();
+    }
+
+    private void loadDailyData() {
+        // Fetch summary for this specific class and date
+        ApiService.create().getSummary(userId, selectedDateDb, classId).enqueue(new Callback<ApiService.SummaryModel>() {
+            @Override
+            public void onResponse(Call<ApiService.SummaryModel> call, Response<ApiService.SummaryModel> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    ApiService.SummaryModel summary = response.body();
+                    tvPresentCount.setText(String.valueOf(summary.present));
+                    tvAbsentCount.setText(String.valueOf(summary.absent));
+                    tvLateCount.setText(String.valueOf(summary.late));
+                    
+                    int total = summary.present + summary.absent + summary.late;
+                    int rate = total > 0 ? Math.round((summary.present * 100f) / total) : 0;
+                    tvRateCount.setText(String.format(Locale.getDefault(), "%d%%", rate));
+                }
+            }
+            @Override
+            public void onFailure(Call<ApiService.SummaryModel> call, Throwable t) {}
+        });
+
+        // Fetch attendance records for this class and date to update the list
+        ApiService.create().getTodayAttendance(classId, selectedDateDb).enqueue(new Callback<List<ApiService.AttendanceRecord>>() {
+            @Override
+            public void onResponse(Call<List<ApiService.AttendanceRecord>> call, Response<List<ApiService.AttendanceRecord>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    updateStudentListWithDailyStatus(response.body());
+                }
+            }
+            @Override
+            public void onFailure(Call<List<ApiService.AttendanceRecord>> call, Throwable t) {}
+        });
+    }
+
+    private void updateStudentListWithDailyStatus(List<ApiService.AttendanceRecord> records) {
+        // We still need the student names, so we might need to load students if we haven't
+        ApiService.create().getStudents(classId).enqueue(new Callback<List<ApiService.StudentModel>>() {
+            @Override
+            public void onResponse(Call<List<ApiService.StudentModel>> call, Response<List<ApiService.StudentModel>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    renderDailyStudentList(response.body(), records);
+                }
+            }
+            @Override
+            public void onFailure(Call<List<ApiService.StudentModel>> call, Throwable t) {}
+        });
+    }
+
+    private void renderDailyStudentList(List<ApiService.StudentModel> students, List<ApiService.AttendanceRecord> records) {
+        llStudentAttendanceList.removeAllViews();
+        java.util.Map<Integer, String> statusMap = new java.util.HashMap<>();
+        for (ApiService.AttendanceRecord r : records) {
+            statusMap.put(r.student_id, r.status);
+        }
+
+        for (ApiService.StudentModel sm : students) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(0, 12, 0, 12);
+
+            TextView tvName = new TextView(this);
+            tvName.setText(sm.name);
+            tvName.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvName.setTextSize(14f);
+            tvName.setTextColor(0xFF000000);
+
+            TextView tvId = new TextView(this);
+            tvId.setText(sm.student_number);
+            tvId.setTextColor(0xFF888888);
+            tvId.setTextSize(12f);
+
+            String status = statusMap.getOrDefault(sm.id, "Not Marked");
+            int color = 0xFF888888;
+            if (status.equalsIgnoreCase("Present")) color = 0xFF16A34A;
+            else if (status.equalsIgnoreCase("Absent")) color = 0xFFCC0000;
+            else if (status.equalsIgnoreCase("Late")) color = 0xFFD97706;
+
+            TextView tvStatus = new TextView(this);
+            tvStatus.setText("Status: " + status);
+            tvStatus.setTextColor(color);
+            tvStatus.setTypeface(null, android.graphics.Typeface.BOLD);
+            tvStatus.setTextSize(13f);
+
+            row.addView(tvName);
+            row.addView(tvId);
+            row.addView(tvStatus);
+
+            android.view.View divider = new android.view.View(this);
+            divider.setLayoutParams(new LinearLayout.LayoutParams(-1, 1));
+            divider.setBackgroundColor(0xFFEEEEEE);
+            row.addView(divider);
+
+            llStudentAttendanceList.addView(row);
+        }
     }
 
     private void loadOverallClassData() {
