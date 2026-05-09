@@ -145,6 +145,14 @@ public class AttendanceActivity extends AppCompatActivity {
         });
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (selectedClassId != -1) {
+            loadStudentsOnline();
+        }
+    }
+
     private void updateDateDisplay() {
         tvAttendanceDate.setText(new SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(calendar.getTime()));
         today = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.getTime());
@@ -377,13 +385,21 @@ public class AttendanceActivity extends AppCompatActivity {
         String tName = prefs.getString("name", "Teacher");
         String className = spinnerClass.getSelectedItem().toString();
 
+        SharedPreferences attendancePrefs = getSharedPreferences("AttendancePrefs", MODE_PRIVATE);
+        SharedPreferences.Editor editor = attendancePrefs.edit();
+
         attendanceMap.forEach((studentId, status) -> {
+            // Save locally for immediate reflection in Seating
+            editor.putString("status_" + studentId + "_" + today, status);
+            
             ApiService.create().markAttendance(studentId, studentNamesCache.get(studentId), 
                 className, userId, tName, today, status, selectedClassId).enqueue(new Callback<>() {
                     @Override public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {}
                     @Override public void onFailure(Call<ResponseBody> call, Throwable t) {}
                 });
         });
+        editor.apply();
+        
         Toast.makeText(this, "Attendance sent to server!", Toast.LENGTH_SHORT).show();
         attendanceMap.clear();
         loadStudentsOnline();
@@ -474,6 +490,11 @@ public class AttendanceActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                 if (response.isSuccessful()) {
+                    // Save locally for immediate reflection in Seating
+                    getSharedPreferences("AttendancePrefs", MODE_PRIVATE).edit()
+                            .putString("status_" + typedStudent.id + "_" + today, status)
+                            .apply();
+
                     Toast.makeText(AttendanceActivity.this, "Marked " + typedStudent.name + " as " + status, Toast.LENGTH_SHORT).show();
                     updateMarkedList(typedStudent.name, status);
                     typedStudent = null;

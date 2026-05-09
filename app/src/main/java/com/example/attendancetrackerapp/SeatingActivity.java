@@ -381,16 +381,16 @@ public class SeatingActivity extends AppCompatActivity {
 
     private void applyStatusColor(TextView tv, String status) {
         if ("Present".equalsIgnoreCase(status)) {
-            tv.setBackgroundColor(android.graphics.Color.GREEN);
+            tv.setBackgroundColor(0xFF16A34A); // Green
             tv.setTextColor(Color.WHITE);
         } else if ("Absent".equalsIgnoreCase(status)) {
-            tv.setBackgroundColor(android.graphics.Color.RED);
+            tv.setBackgroundColor(0xFFCC0000); // Red
             tv.setTextColor(Color.WHITE);
         } else if ("Late".equalsIgnoreCase(status)) {
-            tv.setBackgroundColor(android.graphics.Color.parseColor("#FFA500")); 
+            tv.setBackgroundColor(0xFFD97706); // Amber
             tv.setTextColor(Color.WHITE);
         } else {
-            tv.setBackgroundColor(0xFFF3F4F6); 
+            tv.setBackgroundColor(0xFFF3F4F6); // Light Gray
             tv.setTextColor(0xFF1F2937);
         }
     }
